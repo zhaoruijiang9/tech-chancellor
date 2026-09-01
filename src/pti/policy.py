@@ -48,6 +48,7 @@ class Evaluation:
     semantic_review: dict[str, Any] = field(default_factory=dict)
     source_query: str = ""
     source_group: str = ""
+    review_reason: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -74,6 +75,7 @@ class Evaluation:
             "semantic_review": self.semantic_review,
             "source_query": self.source_query,
             "source_group": self.source_group,
+            "review_reason": self.review_reason,
         }
 
 

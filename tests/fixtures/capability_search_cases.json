@@ -1,0 +1,12 @@
+[
+  {"name":"large_repository_context","problem":"large repository code context retrieval","task_context":"understand unfamiliar codebase","constraints":["no background service"]},
+  {"name":"code_semantic_search","problem":"semantic code search","task_context":"find symbols across a repository","constraints":[]},
+  {"name":"context_compression","problem":"compress tool outputs and reduce tokens","task_context":"keep agent context small","constraints":[]},
+  {"name":"persistent_context_memory","problem":"persistent context memory for personal assistant","task_context":"remember useful context","constraints":[]},
+  {"name":"agent_workflow","problem":"agent workflow specifications and review receipts","task_context":"disciplined coding workflow","constraints":["low integration cost"]},
+  {"name":"observability","problem":"command monitoring and execution evidence","task_context":"audit agent runs","constraints":[]},
+  {"name":"quant_backtesting","problem":"quant research backtesting","task_context":"compare strategy research engines","constraints":["do not connect broker"]},
+  {"name":"already_have","problem":"agent workflow","task_context":"already have Codex and native tools","current_capabilities":["agent workflow","native tools"],"constraints":[]},
+  {"name":"constraint_conflict","problem":"context aware desktop assistant","task_context":"personal context capture","constraints":["offline only","no local data collection"]},
+  {"name":"genuine_no_match","problem":"quantum compiler verification","task_context":"formal quantum circuit compiler","constraints":["no network"]}
+]

@@ -54,3 +54,5 @@ class ObservabilityTests(unittest.TestCase):
         with db._connect() as connection:
             self.assertEqual(connection.execute("select count(*) from chancellor_decisions").fetchone()[0], 1)
             self.assertEqual(connection.execute("select count(*) from chancellor_decision_history").fetchone()[0], 2)
+            current = json.loads(connection.execute("select decision_json from chancellor_decisions where github_repository_id=7").fetchone()[0])
+            self.assertEqual(current["ACTION"], "REFERENCE_ONLY")

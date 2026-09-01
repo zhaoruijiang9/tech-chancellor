@@ -41,13 +41,15 @@ class LocalSemanticChancellor:
             "WHAT_PROBLEM_DOES_IT_SOLVE": readme[:300] or description or "UNKNOWN",
             "WHAT_USER_ALREADY_HAS": str(existing),
             "CAPABILITY_DELTA": delta,
-            "IS_IT_MATERIALLY_BETTER": "UNPROVEN" if not evidence else "REQUIRES_COMPARISON",
+            "IS_IT_ACTUALLY_BETTER": "UNPROVEN" if not evidence else "REQUIRES_COMPARISON",
             "DUPLICATION": duplicate,
             "INTEGRATION_COST": "UNKNOWN",
             "SECURITY_RISK": "UNTRUSTED_EXTERNAL_INPUT; no code execution permitted",
             "MAINTENANCE_RISK": "UNKNOWN" if not evidence else "See release and commit evidence",
             "BEST_ROUTE": domains[0] if domains else "GENERAL",
-            "RECOMMENDED_ACTION": "review_candidate" if evidence else "watch_for_enrichment",
+            "CURRENT_NEED_MATCH": "UNKNOWN",
+            "MATURITY": "UNKNOWN" if not evidence else "REVIEWED_EVIDENCE",
+            "ACTION": "USER_REVIEW_RECOMMENDED" if evidence else "WATCH",
             "system_instruction_effect": "IGNORED_AS_UNTRUSTED_INPUT",
         }
 

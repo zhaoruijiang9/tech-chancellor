@@ -10,6 +10,7 @@ from .chancellor_contract import import_decision
 from .packet_lifecycle import claim_packet, complete_packet, list_active_pending_packets, retry_packet
 from .runtime_lock import CrashSafeLock, LockState
 from .storage import Database
+from .capability_library import build_library
 from .models import utc_now
 
 CODEX_EXE = Path(os.environ.get("PTI_CODEX_EXE", r"C:\Users\25654\AppData\Roaming\npm\node_modules\@openai\codex\node_modules\@openai\codex-win32-x64\vendor\x86_64-pc-windows-msvc\bin\codex.exe"))
@@ -72,6 +73,8 @@ def run_stage_b(root: str | Path, limit: int = 5) -> dict[str, Any]:
         finished_at = utc_now()
         db.finish_stage_b_run(run_id, finished_at, status, claimed, codex_invocations, processed,
                               len(failures), not active_packets, False, 0 if status != "CHANCELLOR_NOT_EVALUATED" else 1)
+        if processed:
+            build_library(root)
         return {"status": status, "run_id": run_id, "started_at": started_at, "completed_at": finished_at,
                 "claimed": claimed, "codex_invocations": codex_invocations, "processed": processed, "failures": failures}
     except Exception:

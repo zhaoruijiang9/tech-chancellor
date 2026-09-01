@@ -45,6 +45,9 @@ class RepositoryRecord:
     description: str = ""
     topics: list[str] = field(default_factory=list)
     default_branch: str | None = None
+    observation_fingerprint: str | None = None
+    material_evidence_fingerprint: str | None = None
+    material_evidence_projection: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -69,4 +72,7 @@ class RepositoryRecord:
             "description": self.description,
             "topics": self.topics,
             "default_branch": self.default_branch,
+            "observation_fingerprint": self.observation_fingerprint,
+            "material_evidence_fingerprint": self.material_evidence_fingerprint,
+            "material_evidence_projection": self.material_evidence_projection,
         }

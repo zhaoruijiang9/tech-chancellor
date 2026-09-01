@@ -4,6 +4,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from .models import RepositoryRecord
+from .chancellor_contract import validate_decision
 
 
 class Database:
@@ -49,7 +50,10 @@ class Database:
                     content_fingerprint TEXT,
                     description TEXT NOT NULL DEFAULT '',
                     topics TEXT NOT NULL DEFAULT '[]',
-                    default_branch TEXT
+                    default_branch TEXT,
+                    observation_fingerprint TEXT,
+                    material_evidence_fingerprint TEXT,
+                    material_evidence_projection TEXT NOT NULL DEFAULT '{}'
                 )
                 """
             )
@@ -104,9 +108,42 @@ class Database:
             for name, definition in {
                 "scan_run_id": "TEXT", "route": "TEXT", "report_path": "TEXT",
                 "chancellor_history_id": "INTEGER",
+                "observation_fingerprint": "TEXT",
+                "material_evidence_fingerprint": "TEXT",
+                "material_evidence_projection": "TEXT NOT NULL DEFAULT '{}'",
             }.items():
                 if name not in columns:
                     connection.execute(f"ALTER TABLE user_feedback ADD COLUMN {name} {definition}")
+            repository_columns = {row[1] for row in connection.execute("PRAGMA table_info(repositories)")}
+            for name, definition in {
+                "observation_fingerprint": "TEXT",
+                "material_evidence_fingerprint": "TEXT",
+                "material_evidence_projection": "TEXT NOT NULL DEFAULT '{}'",
+            }.items():
+                if name not in repository_columns:
+                    connection.execute(f"ALTER TABLE repositories ADD COLUMN {name} {definition}")
+            latest_rows = connection.execute("""select h.github_repository_id,h.decision_json,h.packet_name,h.imported_at
+                from chancellor_decision_history h join (select github_repository_id,max(id) id
+                from chancellor_decision_history group by github_repository_id) latest on latest.id=h.id""").fetchall()
+            for row in latest_rows:
+                try:
+                    decision = json.loads(row[1])
+                except (TypeError, json.JSONDecodeError):
+                    continue
+                if validate_decision(decision).valid:
+                    connection.execute("""insert into chancellor_decisions
+                        (github_repository_id,decision_json,packet_name,imported_at) values (?,?,?,?)
+                        on conflict(github_repository_id) do update set decision_json=excluded.decision_json,
+                        packet_name=excluded.packet_name,imported_at=excluded.imported_at""",
+                        (row[0], json.dumps(decision, ensure_ascii=False, sort_keys=True), row[2], row[3]))
+            current_rows = connection.execute("select github_repository_id,decision_json from chancellor_decisions").fetchall()
+            for row in current_rows:
+                try:
+                    valid = validate_decision(json.loads(row[1])).valid
+                except (TypeError, json.JSONDecodeError):
+                    valid = False
+                if not valid:
+                    connection.execute("delete from chancellor_decisions where github_repository_id = ?", (row[0],))
 
     def upsert_repository(self, record: RepositoryRecord) -> None:
         values = record.to_dict()
@@ -118,8 +155,9 @@ class Database:
                     stars, forks, pushed_at, release_state, license_spdx, is_fork,
                     parent_repository_id, previous_score, previous_decision, previous_routes,
                     rejection_reason, review_after, content_fingerprint, description, topics,
-                    default_branch
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    default_branch, observation_fingerprint, material_evidence_fingerprint,
+                    material_evidence_projection
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(github_repository_id) DO UPDATE SET
                     canonical_owner_repo=excluded.canonical_owner_repo,
                     url=excluded.url,
@@ -139,7 +177,10 @@ class Database:
                     content_fingerprint=excluded.content_fingerprint,
                     description=excluded.description,
                     topics=excluded.topics,
-                    default_branch=excluded.default_branch
+                    default_branch=excluded.default_branch,
+                    observation_fingerprint=excluded.observation_fingerprint,
+                    material_evidence_fingerprint=excluded.material_evidence_fingerprint,
+                    material_evidence_projection=excluded.material_evidence_projection
                 """,
                 (
                     values["github_repository_id"], values["canonical_owner_repo"], values["url"],
@@ -149,6 +190,8 @@ class Database:
                     values["previous_decision"], json.dumps(values["previous_routes"]),
                     values["rejection_reason"], values["review_after"], values["content_fingerprint"],
                     values["description"], json.dumps(values["topics"]), values["default_branch"],
+                    values["observation_fingerprint"], values["material_evidence_fingerprint"],
+                    json.dumps(values["material_evidence_projection"], ensure_ascii=False),
                 ),
             )
 
@@ -160,6 +203,7 @@ class Database:
         values["is_fork"] = bool(values["is_fork"])
         values["previous_routes"] = json.loads(values.pop("previous_routes") or "[]")
         values["topics"] = json.loads(values.pop("topics") or "[]")
+        values["material_evidence_projection"] = json.loads(values.get("material_evidence_projection") or "{}")
         return RepositoryRecord(**values)
 
     def get_repository(self, repository_id: int) -> RepositoryRecord | None:
@@ -168,6 +212,10 @@ class Database:
                 "SELECT * FROM repositories WHERE github_repository_id = ?", (repository_id,)
             ).fetchone()
         return self._record(row)
+
+    def has_current_semantic_decision(self, repository_id: int) -> bool:
+        with self._connect() as connection:
+            return connection.execute("SELECT 1 FROM chancellor_decisions WHERE github_repository_id = ?", (repository_id,)).fetchone() is not None
 
     def list_repositories(self) -> list[RepositoryRecord]:
         with self._connect() as connection:
@@ -233,8 +281,11 @@ class Database:
     def record_chancellor_decision(self, repository_id: int, decision: dict, packet_name: str,
                                    scan_run_id: str | None = None) -> None:
         with self._connect() as connection:
-            connection.execute("INSERT OR IGNORE INTO chancellor_decisions (github_repository_id, decision_json, packet_name) VALUES (?, ?, ?)",
-                               (repository_id, json.dumps(decision, ensure_ascii=False, sort_keys=True), packet_name))
+            connection.execute("""INSERT INTO chancellor_decisions (github_repository_id, decision_json, packet_name)
+                VALUES (?, ?, ?)
+                ON CONFLICT(github_repository_id) DO UPDATE SET decision_json=excluded.decision_json,
+                packet_name=excluded.packet_name, imported_at=CURRENT_TIMESTAMP""",
+                (repository_id, json.dumps(decision, ensure_ascii=False, sort_keys=True), packet_name))
             connection.execute("""INSERT INTO chancellor_decision_history
                 (github_repository_id, scan_run_id, decision_json, packet_name) VALUES (?, ?, ?, ?)""",
                 (repository_id, scan_run_id, json.dumps(decision, ensure_ascii=False, sort_keys=True), packet_name))

@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .policy import Evaluation
+from .review_queue import allocate_review_slots
 
 
 @dataclass
@@ -71,7 +72,7 @@ def write_chancellor_pending(root: str | Path, decisions: list[Evaluation], run_
     root = Path(root).resolve() / "chancellor_pending"
     root.mkdir(parents=True, exist_ok=True)
     paths: list[Path] = []
-    for decision in decisions:
+    for decision in allocate_review_slots(decisions, 3):
         if not decision.semantic_review:
             continue
         packet_id = run_id or uuid.uuid4().hex[:10]
@@ -89,6 +90,7 @@ def write_chancellor_pending(root: str | Path, decisions: list[Evaluation], run_
             "source_failures": [item for item in decision.evidence if item.startswith("enrichment_failure=")],
             "status": "PENDING_CODEX_REVIEW",
             "scan_run_id": run_id,
+            "review_reason": decision.review_reason,
         }
         path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         paths.append(path)
@@ -98,19 +100,22 @@ def write_chancellor_pending(root: str | Path, decisions: list[Evaluation], run_
 def write_run_report(root: str | Path, report: Report) -> Path:
     root = Path(root).resolve()
     root.joinpath("reports").mkdir(parents=True, exist_ok=True)
-    path = root / "reports" / "latest.json"
     payload = {
+        "status": "PREFILTER_ONLY_NOT_FINAL",
         "high_priority": [item.to_dict() for item in report.high_priority],
         "secondary": [item.to_dict() for item in report.secondary],
         "archived_count": len(report.archived),
         "failures": report.failures,
     }
+    path = root / "reports" / "prefilter_latest.json"
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    markdown = root / "reports" / "latest.md"
-    lines = ["# Personal Tech Intelligence Report", "", f"High priority: {len(report.high_priority)}", f"Secondary: {len(report.secondary)}", ""]
+    (root / "reports" / "latest.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    markdown = root / "reports" / "prefilter_latest.md"
+    lines = ["# Deterministic Prefilter View", "", "PREFILTER_ONLY_NOT_FINAL", "", f"High priority: {len(report.high_priority)}", f"Secondary: {len(report.secondary)}", ""]
     for item in report.high_priority + report.secondary:
         lines.extend([f"## {item.candidate.name}", f"- Decision: `{item.decision}`", f"- Route: `{item.primary_route}`", f"- Score: `{item.total}`", f"- Why: {item.incremental_value}", ""])
     if report.failures:
         lines.extend(["## Run Status", "- `DISCOVERY_NOT_EVALUATED` occurred for at least one query."])
     markdown.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    (root / "reports" / "latest.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
     return path

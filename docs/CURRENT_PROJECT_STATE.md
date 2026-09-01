@@ -22,6 +22,8 @@ environment files.
 - Formal tasks: `PTI-Radar-Scan` and `PTI-Chancellor` only.
 - Formal tasks run hidden PowerShell launchers with no-window Python/Codex child processes.
 - Current pending count: 0 at the time of this baseline.
+- Current ledger count after MVP v1.2 migration: 23 unique repositories; 7
+  valid current semantic decisions and 82 append-only history records.
 - Latest scan: `SCAN_NOT_EVALUATED` because two GitHub requests failed with
   SSL/remote connection errors; this is preserved as source coverage evidence.
 - Latest Chancellor recovery: three pending packets processed successfully.

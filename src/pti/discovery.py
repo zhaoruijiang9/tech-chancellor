@@ -6,6 +6,7 @@ from .models import RepositoryRecord
 from .policy import Candidate, Evaluation, decide_candidate, score_candidate
 from .chancellor import LocalSemanticChancellor, build_review_packet
 from .storage import Database
+from .review_queue import fingerprint, material_evidence_projection, review_eligibility
 
 
 @dataclass
@@ -59,6 +60,15 @@ def run_discovery(config: dict[str, Any], client: Any, db: Database, capability_
                 if historical and historical.previous_decision in {"IGNORE", "ARCHIVE"} and historical.pushed_at == record.pushed_at and historical.release_state == record.release_state:
                     continue
                 evaluation = decide_candidate(score_candidate(_candidate(record, domain, historical), capability_profile))
+                projection = material_evidence_projection(record)
+                record.observation_fingerprint = fingerprint({"description": record.description, "topics": sorted(record.topics),
+                                                               "stars": record.stars, "pushed_at": record.pushed_at,
+                                                               "release_state": record.release_state})
+                record.material_evidence_projection = projection
+                record.material_evidence_fingerprint = fingerprint(projection)
+                semantic_baseline = historical if historical and db.has_current_semantic_decision(record.github_repository_id) else None
+                eligibility = review_eligibility(record, semantic_baseline)
+                evaluation.review_reason = eligibility.reason if eligibility.reason else "OBSERVATION_CHANGED" if eligibility.observation_changed else "UNCHANGED"
                 evaluation.source_query = query
                 evaluation.source_group = domain
                 enrichment_level_used = None
@@ -73,9 +83,10 @@ def run_discovery(config: dict[str, Any], client: Any, db: Database, capability_
                     evaluation.evidence.extend(f"enrichment_failure={item['source']}:{item['code']}" for item in evidence.failures)
                     if evidence.readme:
                         evaluation.candidate.readme = evidence.readme
-                    evaluation.semantic_review = LocalSemanticChancellor().review(build_review_packet(
-                        evaluation.candidate.__dict__, {"score_total": evaluation.total, "priority": evaluation.priority},
-                        capability_profile, [], evidence.to_dict()))
+                    if eligibility.reason:
+                        evaluation.semantic_review = LocalSemanticChancellor().review(build_review_packet(
+                            evaluation.candidate.__dict__, {"score_total": evaluation.total, "priority": evaluation.priority},
+                            capability_profile, [], evidence.to_dict()))
                 if historical:
                     evaluation.evidence.append("historical_identity_match=true")
                 db.upsert_repository(record)
