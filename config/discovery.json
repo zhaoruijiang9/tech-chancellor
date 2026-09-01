@@ -1,0 +1,16 @@
+{
+  "request_budget": 20,
+  "enrichment_level": "STANDARD",
+  "enrichment_candidate_cap": 3,
+  "per_query_cap": 5,
+  "total_candidate_cap": 20,
+  "cooldown_days": 14,
+  "lookback_days": 45,
+  "report_limits": {"high_priority": 5, "secondary": 10},
+  "query_groups": [
+    {"domain": "AI_AGENT", "queries": ["agent framework language:python", "MCP tools language:python"]},
+    {"domain": "AI_EXPERIENCE", "queries": ["context engineering AI language:python"]},
+    {"domain": "QUANT_DATA", "queries": ["quant research data language:python"]},
+    {"domain": "PRODUCTIVITY", "queries": ["AI productivity automation language:python"]}
+  ]
+}

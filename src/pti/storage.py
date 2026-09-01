@@ -1,0 +1,275 @@
+import json
+import sqlite3
+from contextlib import contextmanager
+from pathlib import Path
+
+from .models import RepositoryRecord
+
+
+class Database:
+    def __init__(self, path: str | Path):
+        self.path = Path(path)
+
+    @contextmanager
+    def _connect(self):
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        connection = sqlite3.connect(self.path)
+        connection.row_factory = sqlite3.Row
+        try:
+            yield connection
+            connection.commit()
+        except Exception:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
+
+    def initialize(self) -> None:
+        with self._connect() as connection:
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS repositories (
+                    github_repository_id INTEGER PRIMARY KEY,
+                    canonical_owner_repo TEXT NOT NULL,
+                    url TEXT NOT NULL,
+                    first_seen TEXT NOT NULL,
+                    last_seen TEXT NOT NULL,
+                    stars INTEGER NOT NULL DEFAULT 0,
+                    forks INTEGER NOT NULL DEFAULT 0,
+                    pushed_at TEXT,
+                    release_state TEXT,
+                    license_spdx TEXT,
+                    is_fork INTEGER NOT NULL DEFAULT 0,
+                    parent_repository_id INTEGER,
+                    previous_score REAL,
+                    previous_decision TEXT,
+                    previous_routes TEXT NOT NULL DEFAULT '[]',
+                    rejection_reason TEXT,
+                    review_after TEXT,
+                    content_fingerprint TEXT,
+                    description TEXT NOT NULL DEFAULT '',
+                    topics TEXT NOT NULL DEFAULT '[]',
+                    default_branch TEXT
+                )
+                """
+            )
+            connection.execute("""CREATE TABLE IF NOT EXISTS user_feedback (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                github_repository_id INTEGER NOT NULL,
+                label TEXT NOT NULL CHECK(label IN ('USEFUL','NOT_USEFUL','ALREADY_HAVE','WRONG_ROUTE','TOO_COMPLEX','TOO_RISKY','WATCH','APPROVE_FOR_REVIEW')),
+                note TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )""")
+            connection.execute("""CREATE TABLE IF NOT EXISTS chancellor_decisions (
+                github_repository_id INTEGER PRIMARY KEY, decision_json TEXT NOT NULL,
+                packet_name TEXT NOT NULL, imported_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )""")
+            connection.execute("""CREATE TABLE IF NOT EXISTS scan_runs (
+                run_id TEXT PRIMARY KEY, started_at TEXT NOT NULL, completed_at TEXT,
+                status TEXT, request_count INTEGER NOT NULL DEFAULT 0,
+                candidate_count INTEGER NOT NULL DEFAULT 0, failure_count INTEGER NOT NULL DEFAULT 0
+            )""")
+            connection.execute("""CREATE TABLE IF NOT EXISTS candidate_observations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, scan_run_id TEXT NOT NULL,
+                github_repository_id INTEGER NOT NULL, discovery_domain TEXT NOT NULL,
+                source_query TEXT NOT NULL, deterministic_score REAL NOT NULL,
+                deterministic_decision TEXT NOT NULL, priority TEXT NOT NULL,
+                enrichment_level TEXT, enrichment_failures_json TEXT NOT NULL DEFAULT '[]',
+                observed_at TEXT NOT NULL, UNIQUE(scan_run_id, github_repository_id, source_query)
+            )""")
+            connection.execute("""CREATE TABLE IF NOT EXISTS chancellor_decision_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, github_repository_id INTEGER NOT NULL,
+                scan_run_id TEXT, decision_json TEXT NOT NULL, packet_name TEXT NOT NULL,
+                imported_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )""")
+            connection.execute("""CREATE TABLE IF NOT EXISTS notification_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, scan_run_id TEXT, github_repository_id INTEGER,
+                status TEXT NOT NULL CHECK(status IN ('NOTIFICATION_NOT_REQUIRED','NOTIFICATION_SENT','NOTIFICATION_FAILED')),
+                reason TEXT NOT NULL, report_path TEXT, route TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )""")
+            connection.execute("""CREATE TABLE IF NOT EXISTS stage_b_runs (
+                run_id TEXT PRIMARY KEY, trigger_type TEXT NOT NULL, started_at TEXT NOT NULL,
+                completed_at TEXT, status TEXT, pending_count INTEGER NOT NULL DEFAULT 0,
+                claimed_count INTEGER NOT NULL DEFAULT 0, codex_invocation_count INTEGER NOT NULL DEFAULT 0,
+                success_count INTEGER NOT NULL DEFAULT 0, retryable_failure_count INTEGER NOT NULL DEFAULT 0,
+                no_pending INTEGER NOT NULL DEFAULT 0, already_active INTEGER NOT NULL DEFAULT 0,
+                exit_status INTEGER
+            )""")
+            connection.execute("""UPDATE scan_runs SET status='INTERRUPTED_LEGACY_RUNTIME_REGRESSION',
+                completed_at=COALESCE(completed_at, started_at)
+                WHERE completed_at IS NULL AND (status IS NULL OR status='')""")
+            connection.execute("""UPDATE stage_b_runs SET status='INTERRUPTED_RUNTIME_RECOVERED',
+                completed_at=COALESCE(completed_at, started_at), exit_status=1
+                WHERE completed_at IS NULL AND (status IS NULL OR status='')""")
+            columns = {row[1] for row in connection.execute("PRAGMA table_info(user_feedback)")}
+            for name, definition in {
+                "scan_run_id": "TEXT", "route": "TEXT", "report_path": "TEXT",
+                "chancellor_history_id": "INTEGER",
+            }.items():
+                if name not in columns:
+                    connection.execute(f"ALTER TABLE user_feedback ADD COLUMN {name} {definition}")
+
+    def upsert_repository(self, record: RepositoryRecord) -> None:
+        values = record.to_dict()
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO repositories (
+                    github_repository_id, canonical_owner_repo, url, first_seen, last_seen,
+                    stars, forks, pushed_at, release_state, license_spdx, is_fork,
+                    parent_repository_id, previous_score, previous_decision, previous_routes,
+                    rejection_reason, review_after, content_fingerprint, description, topics,
+                    default_branch
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(github_repository_id) DO UPDATE SET
+                    canonical_owner_repo=excluded.canonical_owner_repo,
+                    url=excluded.url,
+                    last_seen=excluded.last_seen,
+                    stars=excluded.stars,
+                    forks=excluded.forks,
+                    pushed_at=excluded.pushed_at,
+                    release_state=excluded.release_state,
+                    license_spdx=excluded.license_spdx,
+                    is_fork=excluded.is_fork,
+                    parent_repository_id=excluded.parent_repository_id,
+                    previous_score=excluded.previous_score,
+                    previous_decision=excluded.previous_decision,
+                    previous_routes=excluded.previous_routes,
+                    rejection_reason=excluded.rejection_reason,
+                    review_after=excluded.review_after,
+                    content_fingerprint=excluded.content_fingerprint,
+                    description=excluded.description,
+                    topics=excluded.topics,
+                    default_branch=excluded.default_branch
+                """,
+                (
+                    values["github_repository_id"], values["canonical_owner_repo"], values["url"],
+                    values["first_seen"], values["last_seen"], values["stars"], values["forks"],
+                    values["pushed_at"], values["release_state"], values["license_spdx"],
+                    int(values["is_fork"]), values["parent_repository_id"], values["previous_score"],
+                    values["previous_decision"], json.dumps(values["previous_routes"]),
+                    values["rejection_reason"], values["review_after"], values["content_fingerprint"],
+                    values["description"], json.dumps(values["topics"]), values["default_branch"],
+                ),
+            )
+
+    @staticmethod
+    def _record(row: sqlite3.Row | None) -> RepositoryRecord | None:
+        if row is None:
+            return None
+        values = dict(row)
+        values["is_fork"] = bool(values["is_fork"])
+        values["previous_routes"] = json.loads(values.pop("previous_routes") or "[]")
+        values["topics"] = json.loads(values.pop("topics") or "[]")
+        return RepositoryRecord(**values)
+
+    def get_repository(self, repository_id: int) -> RepositoryRecord | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM repositories WHERE github_repository_id = ?", (repository_id,)
+            ).fetchone()
+        return self._record(row)
+
+    def list_repositories(self) -> list[RepositoryRecord]:
+        with self._connect() as connection:
+            rows = connection.execute("SELECT * FROM repositories ORDER BY last_seen DESC").fetchall()
+        return [self._record(row) for row in rows]
+
+    def record_evaluation(
+        self,
+        repository_id: int,
+        score: float,
+        decision: str,
+        routes: list[str],
+        rejection_reason: str | None,
+        review_after: str | None,
+    ) -> None:
+        with self._connect() as connection:
+            connection.execute(
+                """UPDATE repositories
+                   SET previous_score = ?, previous_decision = ?, previous_routes = ?,
+                       rejection_reason = ?, review_after = ?
+                   WHERE github_repository_id = ?""",
+                (score, decision, json.dumps(routes), rejection_reason, review_after, repository_id),
+            )
+
+    def record_feedback(self, repository_id: int, label: str, note: str = "", scan_run_id: str | None = None,
+                        route: str | None = None, report_path: str | None = None,
+                        chancellor_history_id: int | None = None) -> None:
+        with self._connect() as connection:
+            connection.execute("""INSERT INTO user_feedback
+                (github_repository_id, label, note, scan_run_id, route, report_path, chancellor_history_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (repository_id, label, note[:2000], scan_run_id, route, report_path, chancellor_history_id))
+
+    def get_feedback(self, repository_id: int) -> list[dict]:
+        with self._connect() as connection:
+            rows = connection.execute("SELECT github_repository_id, label, note, created_at, scan_run_id, route, report_path, chancellor_history_id FROM user_feedback WHERE github_repository_id = ? ORDER BY id", (repository_id,)).fetchall()
+        return [dict(row) for row in rows]
+
+    def start_scan_run(self, run_id: str, started_at: str) -> None:
+        with self._connect() as connection:
+            connection.execute("INSERT INTO scan_runs (run_id, started_at) VALUES (?, ?)", (run_id, started_at))
+
+    def record_candidate_observation(self, run_id: str, record: RepositoryRecord, discovery_domain: str,
+                                     source_query: str, score: float, decision: str, priority: str,
+                                     enrichment_level: str | None, enrichment_failures: list[dict]) -> None:
+        with self._connect() as connection:
+            connection.execute("""INSERT OR IGNORE INTO candidate_observations
+                (scan_run_id, github_repository_id, discovery_domain, source_query, deterministic_score,
+                 deterministic_decision, priority, enrichment_level, enrichment_failures_json, observed_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (run_id, record.github_repository_id, discovery_domain, source_query, score, decision, priority,
+                 enrichment_level, json.dumps(enrichment_failures, ensure_ascii=False), record.last_seen))
+
+    def finish_scan_run(self, run_id: str, status: str, request_count: int, failure_count: int,
+                        completed_at: str, candidate_count: int | None = None) -> None:
+        with self._connect() as connection:
+            if candidate_count is None:
+                candidate_count = connection.execute("SELECT count(*) FROM candidate_observations WHERE scan_run_id = ?", (run_id,)).fetchone()[0]
+            connection.execute("""UPDATE scan_runs SET completed_at = ?, status = ?, request_count = ?,
+                candidate_count = ?, failure_count = ? WHERE run_id = ?""",
+                (completed_at, status, request_count, candidate_count, failure_count, run_id))
+
+    def record_chancellor_decision(self, repository_id: int, decision: dict, packet_name: str,
+                                   scan_run_id: str | None = None) -> None:
+        with self._connect() as connection:
+            connection.execute("INSERT OR IGNORE INTO chancellor_decisions (github_repository_id, decision_json, packet_name) VALUES (?, ?, ?)",
+                               (repository_id, json.dumps(decision, ensure_ascii=False, sort_keys=True), packet_name))
+            connection.execute("""INSERT INTO chancellor_decision_history
+                (github_repository_id, scan_run_id, decision_json, packet_name) VALUES (?, ?, ?, ?)""",
+                (repository_id, scan_run_id, json.dumps(decision, ensure_ascii=False, sort_keys=True), packet_name))
+            connection.execute("UPDATE repositories SET previous_decision = ?, previous_routes = ? WHERE github_repository_id = ?",
+                               (decision["ACTION"], json.dumps([decision["BEST_ROUTE"]]), repository_id))
+
+    def latest_chancellor_history(self, repository_id: int) -> dict | None:
+        with self._connect() as connection:
+            row = connection.execute("SELECT * FROM chancellor_decision_history WHERE github_repository_id = ? ORDER BY id DESC LIMIT 1", (repository_id,)).fetchone()
+        return dict(row) if row else None
+
+    def latest_candidate_observation(self, repository_id: int) -> dict | None:
+        with self._connect() as connection:
+            row = connection.execute("SELECT * FROM candidate_observations WHERE github_repository_id = ? ORDER BY id DESC LIMIT 1", (repository_id,)).fetchone()
+        return dict(row) if row else None
+
+    def record_notification_event(self, scan_run_id: str | None, repository_id: int | None, status: str,
+                                  reason: str, report_path: str | None = None, route: str | None = None) -> None:
+        with self._connect() as connection:
+            connection.execute("""INSERT INTO notification_events
+                (scan_run_id, github_repository_id, status, reason, report_path, route)
+                VALUES (?, ?, ?, ?, ?, ?)""",
+                (scan_run_id, repository_id, status, reason, report_path, route))
+
+    def start_stage_b_run(self, run_id: str, trigger_type: str, started_at: str, pending_count: int) -> None:
+        with self._connect() as connection:
+            connection.execute("INSERT INTO stage_b_runs (run_id, trigger_type, started_at, pending_count) VALUES (?, ?, ?, ?)",
+                               (run_id, trigger_type, started_at, pending_count))
+
+    def finish_stage_b_run(self, run_id: str, completed_at: str, status: str, claimed_count: int,
+                           codex_invocations: int, success_count: int, retryable_failures: int,
+                           no_pending: bool, already_active: bool, exit_status: int) -> None:
+        with self._connect() as connection:
+            connection.execute("""UPDATE stage_b_runs SET completed_at=?, status=?, claimed_count=?,
+                codex_invocation_count=?, success_count=?, retryable_failure_count=?, no_pending=?,
+                already_active=?, exit_status=? WHERE run_id=?""",
+                (completed_at, status, claimed_count, codex_invocations, success_count, retryable_failures,
+                 int(no_pending), int(already_active), exit_status, run_id))

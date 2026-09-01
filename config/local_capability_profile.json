@@ -1,0 +1,12 @@
+{
+  "AI_AGENT": "Codex skills, MCP/plugin capabilities, and existing AI agent project are present; exact overlap is UNKNOWN.",
+  "AI_EXPERIENCE": "Codex task, file, web, screenshot, memory guidance, and scheduled automation capabilities are present; semantic search coverage is UNKNOWN.",
+  "QUANT_DATA": "D:\\money and local TDX read-only capability are present; external research coverage is UNKNOWN.",
+  "PRODUCTIVITY": "Python, Node, SQLite, uv, Git, and local Codex automation capabilities are present.",
+  "BUSINESS_MONEY": "UNKNOWN",
+  "RESEARCH_LEARNING": "Jupyter Notebook skill is present; local research corpus is UNKNOWN",
+  "WATCHLIST": "UNKNOWN",
+  "CHANGE_SIGNAL": "UNKNOWN",
+  "MCP": "Codex plugin cache is present; GitHub account connection is UNKNOWN",
+  "local_llm": "Local AI tools and model directories are present; exact runnable model inventory is UNKNOWN"
+}

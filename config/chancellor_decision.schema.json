@@ -1,0 +1,13 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["WHAT_IS_IT", "WHY_NOW", "WHY_USER_MIGHT_CARE", "WHAT_PROBLEM_DOES_IT_SOLVE", "WHAT_USER_ALREADY_HAS", "CAPABILITY_DELTA", "IS_IT_ACTUALLY_BETTER", "DUPLICATION", "CURRENT_NEED_MATCH", "INTEGRATION_COST", "SECURITY_RISK", "MATURITY", "MAINTENANCE_RISK", "BEST_ROUTE", "ACTION"],
+  "properties": {
+    "WHAT_IS_IT": {"type": "string"}, "WHY_NOW": {"type": "string"}, "WHY_USER_MIGHT_CARE": {"type": "string"},
+    "WHAT_PROBLEM_DOES_IT_SOLVE": {"type": "string"}, "WHAT_USER_ALREADY_HAS": {"type": "string"}, "CAPABILITY_DELTA": {"type": "string"},
+    "IS_IT_ACTUALLY_BETTER": {"type": "string"}, "DUPLICATION": {"type": "string"}, "CURRENT_NEED_MATCH": {"type": "string"},
+    "INTEGRATION_COST": {"type": "string"}, "SECURITY_RISK": {"type": "string"}, "MATURITY": {"type": "string"},
+    "MAINTENANCE_RISK": {"type": "string"}, "BEST_ROUTE": {"type": "string"},
+    "ACTION": {"type": "string", "enum": ["IGNORE", "ARCHIVE", "REFERENCE_ONLY", "WATCH", "CANDIDATE_FOR_QUARANTINE", "USER_REVIEW_RECOMMENDED"]}
+  }
+}
