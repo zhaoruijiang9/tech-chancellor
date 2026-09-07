@@ -1,0 +1,23 @@
+{
+  "capability": "Archify",
+  "repository": "tt-a1i/archify",
+  "repository_id": 1211139949,
+  "pinned_commit": "c6519401f7b91b9d43011657880893b0a8955548",
+  "license": "MIT",
+  "activation_tier": "TIER_2_LOW_PRIVILEGE_LOCAL_TOOL",
+  "activation_state": "TRIAL_ENABLED",
+  "evidence_maturity": "TESTED",
+  "availability": "GLOBAL_CODEX_CONTROLLED",
+  "safe_invocation_available": true,
+  "auto_update": false,
+  "browser_open": false,
+  "persistent_service": false,
+  "path_modified": false,
+  "credential_use": false,
+  "rollback": "Set manifests/control.json enabled=false; remove current managed version after review.",
+  "wrapper": "wrappers/run_archify.ps1",
+  "node_version": "v24.18.0",
+  "npm_version": "11.16.0",
+  "dependency_lock_sha256": "f875c29b190f6f5dc14bea7e56879ad2282c0a5212253b24937f77b4f6198054",
+  "source_manifest": "manifests/source-files.json"
+}

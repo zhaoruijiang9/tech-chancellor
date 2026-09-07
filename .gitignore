@@ -19,7 +19,12 @@ codex-*.txt
 
 # Local capability trials and generated artifacts
 quarantine/
-managed_capabilities/**/outputs/
-managed_capabilities/**/node_modules/
-managed_capabilities/**/.cache/
+managed_capabilities/**
+!managed_capabilities/archify/
+!managed_capabilities/archify/current/
+!managed_capabilities/archify/current/README.md
+!managed_capabilities/archify/manifests/
+!managed_capabilities/archify/manifests/*.json
+!managed_capabilities/archify/wrappers/
+!managed_capabilities/archify/wrappers/*.ps1
 *.zip
