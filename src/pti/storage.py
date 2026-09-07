@@ -98,6 +98,41 @@ class Database:
                 no_pending INTEGER NOT NULL DEFAULT 0, already_active INTEGER NOT NULL DEFAULT 0,
                 exit_status INTEGER
             )""")
+            connection.execute("""CREATE TABLE IF NOT EXISTS activation_records (
+                github_repository_id INTEGER PRIMARY KEY,
+                activation_tier TEXT NOT NULL,
+                activation_state TEXT NOT NULL,
+                evidence_maturity TEXT NOT NULL DEFAULT 'REVIEWED',
+                pinned_version TEXT,
+                static_analysis_status TEXT NOT NULL DEFAULT 'NOT_RUN',
+                isolated_test_status TEXT NOT NULL DEFAULT 'NOT_RUN',
+                trial_status TEXT NOT NULL DEFAULT 'NOT_ENABLED',
+                rollback_status TEXT NOT NULL DEFAULT 'UNKNOWN',
+                notes TEXT NOT NULL DEFAULT '',
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )""")
+            activation_columns = {row[1] for row in connection.execute("PRAGMA table_info(activation_records)")}
+            for name, definition in {
+                "real_use_project": "TEXT",
+                "real_use_task_type": "TEXT",
+                "real_use_at": "TEXT",
+                "real_use_outcome": "TEXT",
+                "real_use_evidence": "TEXT",
+            }.items():
+                if name not in activation_columns:
+                    connection.execute(f"ALTER TABLE activation_records ADD COLUMN {name} {definition}")
+            connection.execute("""CREATE TABLE IF NOT EXISTS activation_queue (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                repository_id INTEGER NOT NULL,
+                activation_tier TEXT NOT NULL,
+                desired_next_state TEXT NOT NULL,
+                reason TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                attempt_count INTEGER NOT NULL DEFAULT 0,
+                last_attempt_at TEXT,
+                status TEXT NOT NULL DEFAULT 'PENDING',
+                failure_class TEXT
+            )""")
             connection.execute("""UPDATE scan_runs SET status='INTERRUPTED_LEGACY_RUNTIME_REGRESSION',
                 completed_at=COALESCE(completed_at, started_at)
                 WHERE completed_at IS NULL AND (status IS NULL OR status='')""")
@@ -253,6 +288,89 @@ class Database:
         with self._connect() as connection:
             rows = connection.execute("SELECT github_repository_id, label, note, created_at, scan_run_id, route, report_path, chancellor_history_id FROM user_feedback WHERE github_repository_id = ? ORDER BY id", (repository_id,)).fetchall()
         return [dict(row) for row in rows]
+
+    def upsert_activation(self, record: dict) -> None:
+        with self._connect() as connection:
+            connection.execute("""INSERT INTO activation_records
+                (github_repository_id, activation_tier, activation_state, evidence_maturity,
+                 pinned_version, static_analysis_status, isolated_test_status, trial_status,
+                 rollback_status, notes, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(github_repository_id) DO UPDATE SET
+                 activation_tier=excluded.activation_tier,
+                 activation_state=excluded.activation_state,
+                 evidence_maturity=excluded.evidence_maturity,
+                 pinned_version=excluded.pinned_version,
+                 static_analysis_status=excluded.static_analysis_status,
+                 isolated_test_status=excluded.isolated_test_status,
+                 trial_status=excluded.trial_status,
+                 rollback_status=excluded.rollback_status,
+                 notes=excluded.notes,
+                 updated_at=CURRENT_TIMESTAMP""",
+                (record["github_repository_id"], record["activation_tier"], record["activation_state"],
+                 record.get("evidence_maturity", "REVIEWED"), record.get("pinned_version"),
+                 record.get("static_analysis_status", "NOT_RUN"), record.get("isolated_test_status", "NOT_RUN"),
+                 record.get("trial_status", "NOT_ENABLED"), record.get("rollback_status", "UNKNOWN"),
+                 record.get("notes", "")))
+
+    def get_activation(self, repository_id: int) -> dict | None:
+        with self._connect() as connection:
+            row = connection.execute("SELECT * FROM activation_records WHERE github_repository_id = ?", (repository_id,)).fetchone()
+        return dict(row) if row else None
+
+    def list_activations(self) -> list[dict]:
+        with self._connect() as connection:
+            rows = connection.execute("SELECT * FROM activation_records ORDER BY github_repository_id").fetchall()
+        return [dict(row) for row in rows]
+
+    def record_real_use(self, repository_id: int, project_label: str, task_type: str,
+                        outcome: str, evidence: str, *, real_task_evidence: bool) -> None:
+        if not real_task_evidence:
+            raise ValueError("real use requires explicit current-task evidence")
+        with self._connect() as connection:
+            row = connection.execute("SELECT activation_state FROM activation_records WHERE github_repository_id=?", (repository_id,)).fetchone()
+            if not row or row[0] not in {"TRIAL_ENABLED", "USED"}:
+                raise ValueError("capability must be trial-enabled before real use")
+            connection.execute("""UPDATE activation_records SET activation_state='USED', evidence_maturity='USED',
+                real_use_project=?, real_use_task_type=?, real_use_at=CURRENT_TIMESTAMP,
+                real_use_outcome=?, real_use_evidence=?, updated_at=CURRENT_TIMESTAMP
+                WHERE github_repository_id=?""",
+                (project_label[:300], task_type[:120], outcome[:1000], evidence[:2000], repository_id))
+
+    def enqueue_activation(self, repository_id: int, activation_tier: str, desired_next_state: str, reason: str) -> int:
+        with self._connect() as connection:
+            existing = connection.execute("""SELECT id FROM activation_queue
+                WHERE repository_id=? AND desired_next_state=? AND status IN ('PENDING','PROCESSING')
+                ORDER BY id DESC LIMIT 1""", (repository_id, desired_next_state)).fetchone()
+            if existing:
+                return int(existing[0])
+            cursor = connection.execute("""INSERT INTO activation_queue
+                (repository_id, activation_tier, desired_next_state, reason)
+                VALUES (?, ?, ?, ?)""", (repository_id, activation_tier, desired_next_state, reason[:2000]))
+            return int(cursor.lastrowid)
+
+    def list_activation_queue(self, status: str | None = None) -> list[dict]:
+        with self._connect() as connection:
+            if status:
+                rows = connection.execute("SELECT * FROM activation_queue WHERE status=? ORDER BY id", (status,)).fetchall()
+            else:
+                rows = connection.execute("SELECT * FROM activation_queue ORDER BY id").fetchall()
+        return [dict(row) for row in rows]
+
+    def claim_activation(self, queue_id: int) -> dict | None:
+        with self._connect() as connection:
+            connection.execute("""UPDATE activation_queue SET status='PROCESSING',
+                attempt_count=attempt_count+1, last_attempt_at=CURRENT_TIMESTAMP
+                WHERE id=? AND status='PENDING'""", (queue_id,))
+            row = connection.execute("SELECT * FROM activation_queue WHERE id=?", (queue_id,)).fetchone()
+        return dict(row) if row else None
+
+    def complete_activation(self, queue_id: int, status: str, failure_class: str | None = None) -> None:
+        if status not in {"SUCCEEDED", "RETRYABLE", "BLOCKED_HUMAN", "FAILED_TERMINAL"}:
+            raise ValueError(f"invalid activation queue status: {status}")
+        with self._connect() as connection:
+            connection.execute("UPDATE activation_queue SET status=?, failure_class=? WHERE id=?",
+                               (status, failure_class, queue_id))
 
     def start_scan_run(self, run_id: str, started_at: str) -> None:
         with self._connect() as connection:

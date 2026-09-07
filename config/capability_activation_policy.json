@@ -1,0 +1,30 @@
+{
+  "policy_version": "0.2",
+  "tiers": {
+    "TIER_0_KNOWLEDGE_PATTERN": {
+      "automatic_actions_allowed": ["AUTO_READ", "AUTO_COMPARE", "AUTO_PROMOTE_REFERENCE_PATTERN"],
+      "human_approval_required_before": [],
+      "hard_prohibitions": ["NO_CODE_EXECUTION", "NO_INSTALL", "NO_SERVICE"]
+    },
+    "TIER_1_DECLARATIVE_SKILL": {
+      "automatic_actions_allowed": ["AUTO_QUARANTINE", "AUTO_STATIC_ANALYSIS", "AUTO_ISOLATED_TEST", "AUTO_ENABLE_DECLARATIVE_SKILL_TRIAL"],
+      "human_approval_required_before": ["GLOBAL_SYSTEM_INSTALL", "CREDENTIAL_ACCESS", "SERVICE_START"],
+      "hard_prohibitions": ["NO_CREDENTIAL", "NO_ADMIN", "NO_SERVICE", "NO_SYSTEM_MODIFICATION", "NO_PATH_MODIFICATION"]
+    },
+    "TIER_2_LOW_PRIVILEGE_LOCAL_TOOL": {
+      "automatic_actions_allowed": ["AUTO_QUARANTINE", "AUTO_STATIC_ANALYSIS", "AUTO_ISOLATED_INSTALL", "AUTO_ISOLATED_TEST", "AUTO_ENABLE_LOW_RISK_TIER2_TRIAL"],
+      "human_approval_required_before": ["GLOBAL_SYSTEM_INSTALL", "CREDENTIAL_ACCESS", "SERVICE_START"],
+      "hard_prohibitions": ["NO_CREDENTIAL", "NO_ADMIN", "NO_SERVICE", "NO_PERSISTENT_LISTENER", "NO_SYSTEM_MODIFICATION", "NO_PATH_MODIFICATION", "NO_BROWSER_EXTENSION"]
+    },
+    "TIER_3_SERVICE_OR_HIGH_INTEGRATION": {
+      "automatic_actions_allowed": ["STATIC_ANALYSIS_ONLY"],
+      "human_approval_required_before": ["ANY_EXECUTION", "INSTALL", "SERVICE_START", "NETWORK_ACCESS"],
+      "hard_prohibitions": ["NO_AUTOMATIC_EXECUTION"]
+    },
+    "TIER_4_SENSITIVE_TRADING_OR_PRIVILEGED": {
+      "automatic_actions_allowed": [],
+      "human_approval_required_before": ["ANY_EXECUTION", "ANY_INSTALL", "ANY_DATA_ACCESS", "ANY_TRADING_SCOPE"],
+      "hard_prohibitions": ["NO_D_MONEY_ACCESS", "NO_BROKER", "NO_ACCOUNT", "NO_ORDER", "NO_STRATEGY", "NO_RISK_MODIFICATION", "NO_ADMIN"]
+    }
+  }
+}

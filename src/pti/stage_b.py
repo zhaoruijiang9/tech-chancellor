@@ -12,6 +12,7 @@ from .runtime_lock import CrashSafeLock, LockState
 from .storage import Database
 from .capability_library import build_library
 from .models import utc_now
+from .activation_runtime import postprocess_semantic_decision
 
 CODEX_EXE = Path(os.environ.get("PTI_CODEX_EXE", r"C:\Users\25654\AppData\Roaming\npm\node_modules\@openai\codex\node_modules\@openai\codex-win32-x64\vendor\x86_64-pc-windows-msvc\bin\codex.exe"))
 
@@ -35,6 +36,7 @@ def run_stage_b(root: str | Path, limit: int = 5) -> dict[str, Any]:
     failures: list[dict[str, str]] = []
     claimed = 0
     codex_invocations = 0
+    activation_results: list[dict[str, Any]] = []
     run_id = uuid.uuid4().hex[:12]
     started_at = utc_now()
     db = Database(state / "intelligence.db")
@@ -60,6 +62,18 @@ def run_stage_b(root: str | Path, limit: int = 5) -> dict[str, Any]:
                 decision = import_decision(json.loads(raw_path.read_text(encoding="utf-8")))
                 repo = packet["repository_identity"]
                 db.record_chancellor_decision(int(repo["github_repository_id"]), decision, active_path.name, packet.get("scan_run_id"))
+                try:
+                    activation_results.append({
+                        "repository": repo.get("canonical_owner_repo", repo.get("full_name", "UNKNOWN")),
+                        **postprocess_semantic_decision(db, int(repo["github_repository_id"]), decision),
+                    })
+                except Exception as activation_error:
+                    # Activation is deliberately separate from semantic success.
+                    activation_results.append({
+                        "repository": repo.get("canonical_owner_repo", repo.get("full_name", "UNKNOWN")),
+                        "status": "ACTIVATION_NOT_EVALUATED",
+                        "reason": str(activation_error)[:300],
+                    })
                 route = root / "inbox" / decision["BEST_ROUTE"]
                 route.mkdir(parents=True, exist_ok=True)
                 (route / (active_path.stem + ".chancellor.json")).write_text(json.dumps({"repository": repo, "decision": decision}, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -76,7 +90,8 @@ def run_stage_b(root: str | Path, limit: int = 5) -> dict[str, Any]:
         if processed:
             build_library(root)
         return {"status": status, "run_id": run_id, "started_at": started_at, "completed_at": finished_at,
-                "claimed": claimed, "codex_invocations": codex_invocations, "processed": processed, "failures": failures}
+                "claimed": claimed, "codex_invocations": codex_invocations, "processed": processed,
+                "failures": failures, "activation_results": activation_results}
     except Exception:
         db.finish_stage_b_run(run_id, utc_now(), "CHANCELLOR_NOT_EVALUATED", claimed, codex_invocations,
                               processed, len(failures) + 1, not active_packets, False, 1)
