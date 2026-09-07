@@ -16,3 +16,10 @@ library/generated/
 *.raw.json
 network-*.txt
 codex-*.txt
+
+# Local capability trials and generated artifacts
+quarantine/
+managed_capabilities/**/outputs/
+managed_capabilities/**/node_modules/
+managed_capabilities/**/.cache/
+*.zip
