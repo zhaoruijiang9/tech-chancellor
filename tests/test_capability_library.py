@@ -33,3 +33,23 @@ class CapabilityLibraryTests(unittest.TestCase):
             card = json.loads((root / "library/generated/repositories/owner--repo.json").read_text())
             self.assertEqual(card["evidence_maturity"], "REVIEWED")
             self.assertEqual(card["consumption_form"], "KNOWLEDGE")
+
+    def test_library_exposes_controlled_trial_availability(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            db = root / "intelligence.db"
+            c = sqlite3.connect(db)
+            c.executescript("""
+                create table repositories (github_repository_id integer primary key, canonical_owner_repo text, url text, description text, stars integer, topics text, last_seen text);
+                create table chancellor_decisions (github_repository_id integer primary key, decision_json text, packet_name text, imported_at text);
+                create table activation_records (github_repository_id integer primary key, activation_tier text, activation_state text, evidence_maturity text, pinned_version text, static_analysis_status text, isolated_test_status text, trial_status text, rollback_status text);
+            """)
+            c.execute("insert into repositories values (1,'tt-a1i/archify','https://github.com/tt-a1i/archify','diagram tool',1000,'[]','2026-09-01T00:00:00Z')")
+            c.execute("insert into chancellor_decisions values (1,?,?,?)", (json.dumps({**DECISION, "ACTION": "CANDIDATE_FOR_QUARANTINE", "WHAT_IS_IT": "Archify"}), 'archify.json', '2026-09-01T00:00:00Z'))
+            c.execute("insert into activation_records values (1,'TIER_2_LOW_PRIVILEGE_LOCAL_TOOL','TRIAL_ENABLED','TESTED','abc123','PASS','PASS','NOT_ENABLED','READY')")
+            c.commit(); c.close()
+            build_library(root, db)
+            card = json.loads((root / "library/generated/repositories/tt-a1i--archify.json").read_text())
+            self.assertEqual(card["activation_state"], "TRIAL_ENABLED")
+            self.assertTrue(card["safe_invocation_available"])
+            self.assertEqual(card["availability"], "GLOBAL_CODEX_CONTROLLED")

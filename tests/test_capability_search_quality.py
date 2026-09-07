@@ -38,3 +38,16 @@ class CapabilitySearchQualityTests(unittest.TestCase):
     def test_same_snapshot_and_query_are_deterministic(self):
         args=dict(problem='semantic code search',task_context='find symbols',project_context='',current_capabilities=['native tools'],constraints=[],limit=3)
         self.assertEqual(search_capabilities(self.db,**args),search_capabilities(self.db,**args))
+
+    def test_local_typo_request_does_not_retrieve_capability_cards(self):
+        result = search_capabilities(
+            self.db,
+            problem='fix a typo in a known file',
+            task_context='simple local maintenance',
+            project_context='known repository',
+            current_capabilities=['text editor'],
+            constraints=['direct edit'],
+            limit=3,
+        )
+        self.assertEqual(result['status'], 'NO_MATCH')
+        self.assertEqual(result['results'], [])

@@ -35,3 +35,20 @@ class CapabilitySearchTests(unittest.TestCase):
             c.executescript("create table repositories (github_repository_id integer primary key, canonical_owner_repo text, url text, description text, stars integer, topics text, last_seen text); create table chancellor_decisions (github_repository_id integer primary key, decision_json text, packet_name text, imported_at text);")
             c.commit(); c.close()
             self.assertEqual(search_capabilities(db, problem="quantum compiler", task_context="", project_context="", current_capabilities=[], constraints=[], limit=3)["status"], "NO_MATCH")
+
+    def test_search_returns_activation_availability_for_controlled_trial(self):
+        with tempfile.TemporaryDirectory() as directory:
+            db = Path(directory) / "intelligence.db"; c = sqlite3.connect(db)
+            c.executescript("""
+                create table repositories (github_repository_id integer primary key, canonical_owner_repo text, url text, description text, stars integer, topics text, last_seen text);
+                create table chancellor_decisions (github_repository_id integer primary key, decision_json text, packet_name text, imported_at text);
+                create table activation_records (github_repository_id integer primary key, activation_tier text, activation_state text, evidence_maturity text, pinned_version text, static_analysis_status text, isolated_test_status text, trial_status text, rollback_status text);
+            """)
+            c.execute("insert into repositories values (1,'tt-a1i/archify','https://github.com/tt-a1i/archify','architecture visualization',1000,'[\"architecture\"]','2026-09-01')")
+            payload = json.loads(decision(action="CANDIDATE_FOR_QUARANTINE")); payload["WHAT_IS_IT"] = "Architecture visualization"
+            c.execute("insert into chancellor_decisions values (1,?,?,?)", (json.dumps(payload), 'p.json', '2026-09-01'))
+            c.execute("insert into activation_records values (1,'TIER_2_LOW_PRIVILEGE_LOCAL_TOOL','TRIAL_ENABLED','TESTED','abc123','PASS','PASS','ENABLED_CONTROLLED','READY')")
+            c.commit(); c.close()
+            result = search_capabilities(db, problem="architecture visualization", task_context="map a system", project_context="", current_capabilities=[], constraints=[], limit=3)
+            self.assertEqual(result["results"][0]["activation_state"], "TRIAL_ENABLED")
+            self.assertTrue(result["results"][0]["safe_invocation_available"])
