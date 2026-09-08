@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": { "title": "PTI Minimal Runtime", "output": "pti-minimal-test.html", "quality_profile": "showcase", "views": [ { "id": "main", "label": "Main flow", "focus": ["scheduler", "radar", "state", "chancellor"], "note": "Scheduled PTI evidence flow." } ] },
+  "components": [
+    { "id": "scheduler", "type": "external", "label": "Task Scheduler", "sublabel": "scheduled trigger", "pos": [40, 260], "size": [160, 60] },
+    { "id": "radar", "type": "backend", "label": "Stage A Radar", "sublabel": "discovery", "pos": [280, 260], "size": [160, 60] },
+    { "id": "state", "type": "database", "label": "SQLite state", "sublabel": "evidence", "pos": [520, 260], "size": [160, 60] },
+    { "id": "chancellor", "type": "backend", "label": "Chancellor", "sublabel": "Stage B", "pos": [760, 260], "size": [160, 60] }
+  ],
+  "connections": [ { "id": "a", "from": "scheduler", "to": "radar", "label": "trigger" }, { "id": "b", "from": "radar", "to": "state", "label": "persist" }, { "id": "c", "from": "state", "to": "chancellor", "label": "pending" } ],
+  "cards": [ { "dot": "cyan", "title": "Runtime", "items": ["Evidence first", "Human gate preserved"] } ]
+}

@@ -1,0 +1,17 @@
+{
+  "wrapper_status": "PASS",
+  "exit_code": 0,
+  "mode": "deliver",
+  "type": "architecture",
+  "pinned_commit": "c6519401f7b91b9d43011657880893b0a8955548",
+  "started_at": "2026-09-08T14:37:17.9725174Z",
+  "finished_at": "2026-09-08T14:37:18.2308401Z",
+  "input": "D:\\personal-tech-intelligence\\user_artifacts\\architecture_atlas\\_work\\pti-discovery-activation.architecture.json",
+  "output": "D:\\personal-tech-intelligence\\managed_capabilities\\archify\\outputs\\pti-discovery-activation.html",
+  "output_exists": true,
+  "network_policy": "UPDATE_CHECK_DISABLED",
+  "browser_open": false,
+  "persistent_process": false,
+  "stdout": "{\n  \"schemaVersion\": 1,\n  \"ok\": true,\n  \"command\": \"deliver\",\n  \"type\": \"architecture\",\n  \"input\": \"D:\\\\personal-tech-intelligence\\\\user_artifacts\\\\architecture_atlas\\\\_work\\\\pti-discovery-activation.architecture.json\",\n  \"output\": \"D:\\\\personal-tech-intelligence\\\\managed_capabilities\\\\archify\\\\outputs\\\\pti-discovery-activation.html\",\n  \"specification\": {\n    \"sha256\": \"da93ac5fc8e04e858b825d8d5035ee7ecadce6e54bd26e9c0da8c6289736415e\",\n    \"bytes\": 2758\n  },\n  \"artifact\": {\n    \"sha256\": \"34852d985be08384d77866a52c4cbf3c980718c90145ede257606510925fec93\",\n    \"bytes\": 711151\n  },\n  \"validation\": {\n    \"checksPassed\": 9,\n    \"checkCount\": 9,\n    \"compositionProfile\": \"showcase\",\n    \"compositionStatus\": \"pass\",\n    \"errors\": 0,\n    \"warnings\": 0\n  }\n}",
+  "stderr": ""
+}

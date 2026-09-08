@@ -1,0 +1,17 @@
+{
+  "wrapper_status": "PASS",
+  "exit_code": 0,
+  "mode": "deliver",
+  "type": "architecture",
+  "pinned_commit": "c6519401f7b91b9d43011657880893b0a8955548",
+  "started_at": "2026-09-08T14:38:22.1545656Z",
+  "finished_at": "2026-09-08T14:38:22.4093804Z",
+  "input": "D:\\personal-tech-intelligence\\user_artifacts\\architecture_atlas\\_work\\pti-system-overview.architecture.json",
+  "output": "D:\\personal-tech-intelligence\\managed_capabilities\\archify\\outputs\\pti-system-overview.html",
+  "output_exists": true,
+  "network_policy": "UPDATE_CHECK_DISABLED",
+  "browser_open": false,
+  "persistent_process": false,
+  "stdout": "{\n  \"schemaVersion\": 1,\n  \"ok\": true,\n  \"command\": \"deliver\",\n  \"type\": \"architecture\",\n  \"input\": \"D:\\\\personal-tech-intelligence\\\\user_artifacts\\\\architecture_atlas\\\\_work\\\\pti-system-overview.architecture.json\",\n  \"output\": \"D:\\\\personal-tech-intelligence\\\\managed_capabilities\\\\archify\\\\outputs\\\\pti-system-overview.html\",\n  \"specification\": {\n    \"sha256\": \"6294938b1787c920a4827fbf74a5ba3a194a9cc5f4de9d686a93fafec86d1c46\",\n    \"bytes\": 2410\n  },\n  \"artifact\": {\n    \"sha256\": \"1c50a3a4d845762a852d83ca1520abce9a2ca984aa962c13894fc5208825dfae\",\n    \"bytes\": 709267\n  },\n  \"validation\": {\n    \"checksPassed\": 9,\n    \"checkCount\": 9,\n    \"compositionProfile\": \"showcase\",\n    \"compositionStatus\": \"pass\",\n    \"errors\": 0,\n    \"warnings\": 0\n  }\n}",
+  "stderr": ""
+}

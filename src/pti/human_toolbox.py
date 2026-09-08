@@ -7,6 +7,7 @@ from .capability_library import _card, _read_rows
 
 STATUS_LABELS = {
     "TRIAL_ENABLED": "已安装，可用",
+    "USED": "已实际使用",
     "ACTIVE_PATTERN": "已启用的方法",
     "KEEP_REFERENCE_ONLY": "已研究，当前不值得安装",
     "TESTED_NOT_ADOPTED": "已检查，暂不采用",
@@ -38,9 +39,9 @@ def _with_usage(root: Path, card: dict[str, Any]) -> dict[str, Any]:
 def build_human_toolbox(root: str | Path, db_path: str | Path | None = None) -> dict[str, Any]:
     root = Path(root).resolve()
     cards = [_with_usage(root, _card(row)) for row in _read_rows(db_path or root / "state" / "intelligence.db")]
-    direct = [card for card in cards if card["activation_state"] == "TRIAL_ENABLED"]
+    direct = [card for card in cards if card["activation_state"] in {"TRIAL_ENABLED", "USED"}]
     patterns = [card for card in cards if card["activation_state"] == "ACTIVE_PATTERN"]
-    reference = [card for card in cards if card["activation_state"] not in {"TRIAL_ENABLED", "ACTIVE_PATTERN", "BLOCKED_HUMAN"}]
+    reference = [card for card in cards if card["activation_state"] not in {"TRIAL_ENABLED", "USED", "ACTIVE_PATTERN", "BLOCKED_HUMAN"}]
     human_gate = [card for card in cards if card["activation_state"] == "BLOCKED_HUMAN"]
 
     lines = ["# 我现在能用什么？", "", "这份清单由 PTI 当前能力库自动生成；项目状态以数据库为准。", ""]

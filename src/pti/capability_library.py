@@ -32,8 +32,8 @@ def _card(row: dict[str, Any]) -> dict[str, Any]:
     reason = "USER_REQUESTED" if "user-requested" in str(row.get("packet_name", "")) else "SEMANTIC_REVIEWED"
     tier = row.get("activation_tier") or classify_activation_tier(form, decision.get("BEST_ROUTE", "GENERAL"), row["canonical_owner_repo"])
     state = row.get("activation_state") or ("NOT_ELIGIBLE" if form in {"KNOWLEDGE", "PATTERN"} else "QUARANTINE_READY")
-    availability = "GLOBAL_CODEX_CONTROLLED" if state == "TRIAL_ENABLED" else "REFERENCE_ONLY" if tier == "TIER_0_KNOWLEDGE_PATTERN" else "NOT_AVAILABLE"
-    safe_invocation = state == "TRIAL_ENABLED" and tier in {"TIER_1_DECLARATIVE_SKILL", "TIER_2_LOW_PRIVILEGE_LOCAL_TOOL"}
+    availability = "GLOBAL_CODEX_CONTROLLED" if state in {"TRIAL_ENABLED", "USED"} else "REFERENCE_ONLY" if tier == "TIER_0_KNOWLEDGE_PATTERN" else "NOT_AVAILABLE"
+    safe_invocation = state in {"TRIAL_ENABLED", "USED"} and tier in {"TIER_1_DECLARATIVE_SKILL", "TIER_2_LOW_PRIVILEGE_LOCAL_TOOL"}
     return {"repository": row["canonical_owner_repo"], "url": row["url"], "review_reason": reason,
             "capability_name": decision.get("WHAT_IS_IT", row["description"] or row["canonical_owner_repo"]),
             "problem_solved": decision.get("WHAT_PROBLEM_DOES_IT_SOLVE", "UNKNOWN"),
