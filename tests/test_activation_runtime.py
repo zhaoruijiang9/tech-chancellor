@@ -4,10 +4,21 @@ import unittest
 from pathlib import Path
 
 from pti.activation_policy import evaluate_activation_policy, transition_activation
+from pti.activation_runtime import process_activation_queue
 from pti.storage import Database
 
 
 class ActivationRuntimeTests(unittest.TestCase):
+    def test_pending_queue_is_resolved_without_claiming_execution(self):
+        with tempfile.TemporaryDirectory() as directory:
+            db = Database(Path(directory) / "state.db")
+            db.initialize()
+            db.enqueue_activation(7, "TIER_2_LOW_PRIVILEGE_LOCAL_TOOL", "QUARANTINED", "PINNED_VERSION_MISSING;ROLLBACK_UNCLEAR")
+            results = process_activation_queue(db)
+            self.assertEqual(results[0]["activation_state"], "FAILED_WITH_EXPLAINED_REASON")
+            self.assertEqual(db.list_activation_queue("PENDING"), [])
+            self.assertEqual(db.get_activation(7)["isolated_test_status"], "NOT_RUN")
+
     def test_low_risk_tier_two_policy_is_eligible_only_after_all_gates(self):
         capability = {
             "repository": "owner/tool",

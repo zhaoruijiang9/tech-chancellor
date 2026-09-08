@@ -1,0 +1,34 @@
+{
+  "tt-a1i/archify": {
+    "human_summary": "把代码项目整理成可交互的架构图、数据流图、时序图或前后对比图。",
+    "when_to_use": ["刚接手一个陌生项目", "需要解释模块和外部依赖", "想看入口到数据库的调用链", "比较重构前后的结构变化"],
+    "how_to_ask_codex": ["用 Archify 给我画这个项目的整体架构，突出核心模块、主要数据流和外部依赖。", "用 Archify 比较这次重构前后的架构变化。"],
+    "expected_outputs": ["可交互 HTML", "SVG 或结构化架构图", "必要时的差异说明"],
+    "user_entrypoint": "直接对 Codex 说出项目路径和想看的图。",
+    "automatic_use_policy": "相关架构任务中 Codex 可以自动建议；你明确说使用 Archify 时直接调用。",
+    "main_limitations": ["当前是受控试用，不接触 D:\\money。", "复杂项目的图仍需人工核对。"]
+  },
+  "bmad-code-org/BMAD-METHOD": {
+    "human_summary": "提供先澄清需求、再规划、再实现和验证的结构化开发方法。",
+    "when_to_use": ["需求还比较模糊", "功能涉及多个阶段", "需要保留决策和验收证据"],
+    "how_to_ask_codex": ["先按结构化需求、计划、实现、验证的方式帮我推进这个功能。"],
+    "expected_outputs": ["需求摘要", "实施计划", "验证记录"], "user_entrypoint": "复杂开发任务中 Codex 会参考。", "automatic_use_policy": "作为方法参考自动使用，不强制套完整框架。", "main_limitations": ["没有单独安装 BMAD 全套运行环境。"]
+  },
+  "github/spec-kit": {
+    "human_summary": "强调规格先行、决策可追踪和验收门槛的开发模式。",
+    "when_to_use": ["功能边界需要先写清", "多人或多 agent 协作", "容易出现实现偏题的任务"],
+    "how_to_ask_codex": ["先把这个需求写成可验收的规格，再开始实现。"],
+    "expected_outputs": ["规格说明", "验收条件", "实现与验证记录"], "user_entrypoint": "复杂任务中 Codex 会参考。", "automatic_use_policy": "相关任务自动建议规格先行。", "main_limitations": ["当前启用的是方法模式，不是整套 Spec Kit 安装。"]
+  },
+  "cased/kit": {"human_summary": "帮助 agent 更系统地理解代码库结构、符号和上下文。", "when_to_use": ["代码库很大", "普通搜索难以定位调用关系", "需要先做结构摸底"], "how_to_ask_codex": ["先系统梳理这个代码库的模块、符号和关键调用关系。"], "expected_outputs": ["代码结构摘要", "关键符号和调用线索"], "user_entrypoint": "相关代码理解任务中作为参考。", "automatic_use_policy": "Codex 会先用现有检索能力，必要时参考该方法。", "main_limitations": ["尚未证明需要额外安装工具。"]},
+  "chunkhound/chunkhound": {"human_summary": "提供面向整个代码库的语义检索和上下文组织思路。", "when_to_use": ["需要跨文件寻找概念", "大型项目上下文容易遗漏", "想比较语义检索方案"], "how_to_ask_codex": ["帮我按语义查找与这个问题相关的代码和配置，并说明证据来源。"], "expected_outputs": ["相关文件清单", "语义检索线索", "证据摘要"], "user_entrypoint": "作为检索方法参考。", "automatic_use_policy": "不自动启动 MCP 或索引服务。", "main_limitations": ["未部署额外索引服务，可能不如专用索引器覆盖广。"]},
+  "gmickel/flow-next": {"human_summary": "提供跨 agent 的工作流编排和新鲜上下文 worker 思路。", "when_to_use": ["任务需要拆成多个独立阶段", "上下文过长", "需要比较不同 agent 协作方式"], "how_to_ask_codex": ["把这个任务拆成可审计的阶段，并让每个阶段使用必要的上下文。"], "expected_outputs": ["阶段划分", "输入输出边界", "交接记录"], "user_entrypoint": "作为工作流设计参考。", "automatic_use_policy": "复杂任务可参考，不替换现有 Codex 流程。", "main_limitations": ["没有额外部署其运行时。"]},
+  "headroomlabs-ai/headroom": {"human_summary": "研究如何压缩和整理工具输出，减少 agent 上下文浪费。", "when_to_use": ["工具输出特别长", "上下文窗口成为瓶颈", "想优化信息密度"], "how_to_ask_codex": ["把这些工具结果压缩成保留关键证据的摘要。"], "expected_outputs": ["精简上下文", "保留关键证据的摘要"], "user_entrypoint": "作为上下文优化参考。", "automatic_use_policy": "Codex 可参考其思路，不自动部署代理或 MCP。", "main_limitations": ["压缩质量和部署收益尚未在本机验证。"]},
+  "ComposioHQ/awesome-claude-skills": {"human_summary": "一个第三方 agent skill 和工具索引，适合发现方向，不等于安全可安装。", "when_to_use": ["寻找某类 agent 能力方向", "比较生态中的 skill 分类", "为 PTI 扩充检索词"], "how_to_ask_codex": ["用这个索引帮我找方向，但先按 PTI 规则核验安全性和重复度。"], "expected_outputs": ["候选方向", "重复度和风险判断"], "user_entrypoint": "仅作为参考资料。", "automatic_use_policy": "不自动安装索引中的第三方 skill。", "main_limitations": ["条目质量、兼容性和安全性各不相同。"]},
+  "FoundationAgents/MetaGPT": {"human_summary": "大型多 agent 软件协作框架的架构参考。", "when_to_use": ["研究角色分工", "比较多 agent 协作架构", "设计复杂研发流程"], "how_to_ask_codex": ["参考多 agent 角色分工思路，但保持当前项目的最小实现。"], "expected_outputs": ["架构比较", "角色与边界建议"], "user_entrypoint": "只作为参考。", "automatic_use_policy": "不自动安装或替换 Codex。", "main_limitations": ["与现有 agent 能力重叠较大。"]},
+  "langchain-ai/langchain": {"human_summary": "通用 LLM 应用和 agent 编排生态的参考资料。", "when_to_use": ["比较 LLM 应用抽象", "研究工具调用和链式流程", "寻找生态兼容性线索"], "how_to_ask_codex": ["把这个方案和现有 Codex/Skill 做能力差异比较。"], "expected_outputs": ["能力差异表", "采用或不采用建议"], "user_entrypoint": "只作为参考。", "automatic_use_policy": "不自动加入 PTI 运行栈。", "main_limitations": ["引入完整框架的维护成本可能超过收益。"]},
+  "volcengine/MineContext": {"human_summary": "围绕桌面上下文采集和检索的方向性参考。", "when_to_use": ["研究多模态上下文", "比较桌面 agent 体验", "设计个人知识入口"], "how_to_ask_codex": ["参考它的上下文组织思路，设计一个不泄露本地数据的方案。"], "expected_outputs": ["隐私边界", "上下文流程建议"], "user_entrypoint": "只作为参考。", "automatic_use_policy": "不自动读取桌面或启动后台采集。", "main_limitations": ["隐私、集成和可靠性证据不足。"]},
+  "TauricResearch/TradingAgents": {"human_summary": "金融多 agent 研究框架的参考项目，不代表真实交易能力或盈利能力。", "when_to_use": ["研究金融 agent 角色", "比较研究流程设计", "做合成数据实验"], "how_to_ask_codex": ["只用合成或公开数据分析这个金融 agent 方案，不连接真实交易系统。"], "expected_outputs": ["研究流程比较", "风险和证据边界"], "user_entrypoint": "需要明确提出，且只做隔离研究。", "automatic_use_policy": "不会自动接入真实账户、持仓或订单。", "main_limitations": ["不能证明盈利，也不能接入 D:\\money。"]},
+  "coleam00/archon": {"human_summary": "把 coding agent 工作拆成可重复的 YAML 阶段和验证门。", "when_to_use": ["研究可重复 agent workflow", "比较编排和验证机制", "设计未来隔离实验"], "how_to_ask_codex": ["分析 Archon 的 workflow 编排思路，但不要安装服务或修改当前项目。"], "expected_outputs": ["workflow 能力比较", "集成风险说明"], "user_entrypoint": "当前未部署，需要明确批准后再进一步处理。", "automatic_use_policy": "需要人工批准，当前不启动服务、不配置凭据。", "main_limitations": ["依赖 Bun、服务和可能的凭据；本轮只完成隔离审查。"]},
+  "nieledran/backtesting-engine": {"human_summary": "面向公开或合成数据的量化回测与研究流程参考。", "when_to_use": ["设计回测实验", "比较事件驱动执行抽象", "研究 walk-forward 和组合分析"], "how_to_ask_codex": ["只用合成数据设计一个独立回测实验，不接真实账户和交易系统。"], "expected_outputs": ["回测实验设计", "指标和验证边界"], "user_entrypoint": "当前未部署，需要明确提出隔离研究任务。", "automatic_use_policy": "不会自动连接 broker、IB、MT5 或 D:\\money。", "main_limitations": ["依赖较重，包含 broker/Redis 路径，当前未启用。"]}
+}

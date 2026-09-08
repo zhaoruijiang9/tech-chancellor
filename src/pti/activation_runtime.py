@@ -70,3 +70,49 @@ def postprocess_semantic_decision(db, repository_id: int, decision: dict) -> dic
         db.complete_activation(queue_id, "BLOCKED_HUMAN", "HUMAN_APPROVAL_REQUIRED")
         return {"status": "ACTIVATION_BLOCKED_HUMAN", "tier": policy_decision.tier, "queue_id": queue_id}
     return {"status": "ACTIVATION_NOT_EVALUATED", "tier": policy_decision.tier}
+
+
+def process_activation_queue(db, *, limit: int = 5) -> list[dict]:
+    """Resolve bounded backlog items without claiming unperformed tests."""
+    results: list[dict] = []
+    # Reconcile terminal queue decisions created by earlier runtime versions.
+    for item in db.list_activation_queue():
+        if item["status"] not in {"BLOCKED_HUMAN", "FAILED_TERMINAL"}:
+            continue
+        current = db.get_activation(item["repository_id"])
+        target = "BLOCKED_HUMAN" if item["status"] == "BLOCKED_HUMAN" else "FAILED_WITH_EXPLAINED_REASON"
+        if current and current["activation_state"] == "QUARANTINE_READY":
+            db.upsert_activation({**current, "activation_state": target,
+                                  "static_analysis_status": current.get("static_analysis_status", "NOT_RUN"),
+                                  "isolated_test_status": current.get("isolated_test_status", "NOT_RUN"),
+                                  "notes": "Terminal activation decision reconciled from the activation queue."})
+    for item in db.list_activation_queue("PENDING")[:max(0, limit)]:
+        claimed = db.claim_activation(item["id"])
+        if not claimed or claimed["status"] != "PROCESSING":
+            continue
+        reason = str(item.get("reason", ""))
+        sensitive = any(marker in reason for marker in ("CREDENTIAL_REQUIRED", "TRADING_SCOPE", "ADMIN_REQUIRED"))
+        if sensitive:
+            state = "BLOCKED_HUMAN"
+            queue_status = "BLOCKED_HUMAN"
+            failure = "HUMAN_APPROVAL_REQUIRED"
+            note = "Static review found a credential, trading, or privileged boundary; no execution was attempted."
+        else:
+            state = "FAILED_WITH_EXPLAINED_REASON"
+            queue_status = "FAILED_TERMINAL"
+            failure = "SAFE_REPRODUCIBLE_ACTIVATION_NOT_AVAILABLE"
+            note = "Pinned version, rollback, or isolated execution evidence is missing; no unsafe installation was attempted."
+        db.upsert_activation({
+            "github_repository_id": item["repository_id"],
+            "activation_tier": item["activation_tier"],
+            "activation_state": state,
+            "evidence_maturity": "REVIEWED",
+            "static_analysis_status": "BOUNDARY_REVIEWED",
+            "isolated_test_status": "NOT_RUN",
+            "trial_status": "NOT_ENABLED",
+            "rollback_status": "UNKNOWN",
+            "notes": note,
+        })
+        db.complete_activation(item["id"], queue_status, failure)
+        results.append({"repository_id": item["repository_id"], "activation_state": state, "queue_status": queue_status, "reason": failure})
+    return results

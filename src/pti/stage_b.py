@@ -12,7 +12,8 @@ from .runtime_lock import CrashSafeLock, LockState
 from .storage import Database
 from .capability_library import build_library
 from .models import utc_now
-from .activation_runtime import postprocess_semantic_decision
+from .activation_runtime import postprocess_semantic_decision, process_activation_queue
+from .human_toolbox import build_human_toolbox
 
 CODEX_EXE = Path(os.environ.get("PTI_CODEX_EXE", r"C:\Users\25654\AppData\Roaming\npm\node_modules\@openai\codex\node_modules\@openai\codex-win32-x64\vendor\x86_64-pc-windows-msvc\bin\codex.exe"))
 
@@ -83,12 +84,14 @@ def run_stage_b(root: str | Path, limit: int = 5) -> dict[str, Any]:
                 if packet_path.exists():
                     retry_packet(packet_path)
                 failures.append({"packet": active_path.name, "code": "CHANCELLOR_NOT_EVALUATED", "message": str(error)[:500]})
+        activation_results.extend(process_activation_queue(db))
         status = "CHANCELLOR_SUCCESS_NO_PENDING" if not list_active_pending_packets(pending_root) and not failures else "CHANCELLOR_SUCCESS" if processed else "CHANCELLOR_NOT_EVALUATED"
         finished_at = utc_now()
         db.finish_stage_b_run(run_id, finished_at, status, claimed, codex_invocations, processed,
                               len(failures), not active_packets, False, 0 if status != "CHANCELLOR_NOT_EVALUATED" else 1)
         if processed:
             build_library(root)
+        build_human_toolbox(root)
         return {"status": status, "run_id": run_id, "started_at": started_at, "completed_at": finished_at,
                 "claimed": claimed, "codex_invocations": codex_invocations, "processed": processed,
                 "failures": failures, "activation_results": activation_results}

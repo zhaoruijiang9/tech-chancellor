@@ -11,11 +11,12 @@ from pti.packet_lifecycle import active_pending_count
 from pti.health import health_report
 from pti.capability_library import build_library
 from pti.capability_search import search_capabilities
+from pti.human_toolbox import build_human_toolbox
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Manual Phase 1 technology intelligence run")
-    parser.add_argument("action", nargs="?", choices=["scan", "stage-b", "feedback", "pending-count", "health", "build-library", "search-capabilities"], default="scan")
+    parser.add_argument("action", nargs="?", choices=["scan", "stage-b", "feedback", "pending-count", "health", "build-library", "my-capabilities", "search-capabilities"], default="scan")
     parser.add_argument("repo", nargs="?")
     parser.add_argument("label", nargs="?")
     parser.add_argument("note", nargs="?", default="")
@@ -41,6 +42,10 @@ def main() -> int:
         return 0 if result["status"] in {"HEALTHY", "DEGRADED_HISTORY_ONLY"} else 1
     if args.action == "build-library":
         result = build_library(root)
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0
+    if args.action == "my-capabilities":
+        result = build_human_toolbox(root)
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0
     if args.action == "search-capabilities":

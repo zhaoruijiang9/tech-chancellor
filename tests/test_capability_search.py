@@ -52,3 +52,17 @@ class CapabilitySearchTests(unittest.TestCase):
             result = search_capabilities(db, problem="architecture visualization", task_context="map a system", project_context="", current_capabilities=[], constraints=[], limit=3)
             self.assertEqual(result["results"][0]["activation_state"], "TRIAL_ENABLED")
             self.assertTrue(result["results"][0]["safe_invocation_available"])
+
+    def test_search_returns_human_usage_metadata(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); (root / "config").mkdir(); db = root / "state" / "intelligence.db"; db.parent.mkdir()
+            (root / "config" / "human_capability_usage.json").write_text(json.dumps({
+                "owner/repo": {"human_summary": "人类可读摘要", "how_to_ask_codex": ["直接说目标"]}
+            }), encoding="utf-8")
+            c = sqlite3.connect(db)
+            c.executescript("create table repositories (github_repository_id integer primary key, canonical_owner_repo text, url text, description text, stars integer, topics text, last_seen text); create table chancellor_decisions (github_repository_id integer primary key, decision_json text, packet_name text, imported_at text);")
+            c.execute("insert into repositories values (1,'owner/repo','https://github.com/owner/repo','agent workflow',100,'[]','2026-09-01')")
+            c.execute("insert into chancellor_decisions values (1,?,?,?)", (decision(), 'p.json', '2026-09-01')); c.commit(); c.close()
+            result = search_capabilities(db, problem="agent workflow", task_context="orchestrate agents", project_context="", current_capabilities=[], constraints=[], limit=3)
+            self.assertEqual(result["results"][0]["human_summary"], "人类可读摘要")
+            self.assertEqual(result["results"][0]["how_to_ask_codex"], ["直接说目标"])

@@ -7,6 +7,8 @@ from .activation_policy import classify_activation_tier
 
 
 def _read_rows(db_path: str | Path) -> list[dict[str, Any]]:
+    usage_path = Path(db_path).resolve().parents[1] / "config" / "human_capability_usage.json"
+    usage = json.loads(usage_path.read_text(encoding="utf-8")) if usage_path.exists() else {}
     connection = sqlite3.connect(f"file:{Path(db_path).resolve().as_posix()}?mode=ro", uri=True)
     connection.row_factory = sqlite3.Row
     try:
@@ -17,7 +19,7 @@ def _read_rows(db_path: str | Path) -> list[dict[str, Any]]:
         rows = connection.execute(f"""select r.github_repository_id,r.canonical_owner_repo,r.url,r.description,r.stars,r.topics,
             d.decision_json,d.packet_name,d.imported_at{activation_columns} from repositories r join chancellor_decisions d
             on d.github_repository_id=r.github_repository_id {activation_join} order by r.canonical_owner_repo""").fetchall()
-        return [dict(row) for row in rows]
+        return [{**dict(row), "human_usage": usage.get(dict(row)["canonical_owner_repo"], {})} for row in rows]
     finally:
         connection.close()
 
@@ -49,6 +51,13 @@ def _card(row: dict[str, Any]) -> dict[str, Any]:
             "trial_status": row.get("trial_status") or "NOT_ENABLED",
             "rollback_status": row.get("rollback_status") or "UNKNOWN",
             "best_route": decision.get("BEST_ROUTE", "GENERAL"),
+            "human_summary": row.get("human_usage", {}).get("human_summary", decision.get("WHAT_IS_IT", "UNKNOWN")),
+            "when_to_use": row.get("human_usage", {}).get("when_to_use", []),
+            "how_to_ask_codex": row.get("human_usage", {}).get("how_to_ask_codex", []),
+            "expected_outputs": row.get("human_usage", {}).get("expected_outputs", []),
+            "user_entrypoint": row.get("human_usage", {}).get("user_entrypoint", "直接描述你的目标，Codex 会判断是否相关。"),
+            "automatic_use_policy": row.get("human_usage", {}).get("automatic_use_policy", "由 Codex 按任务相关性判断。"),
+            "main_limitations": row.get("human_usage", {}).get("main_limitations", []),
             "limitations": {key: decision.get(key, "UNKNOWN") for key in
                             ("DUPLICATION", "INTEGRATION_COST", "SECURITY_RISK", "MAINTENANCE_RISK", "IS_IT_ACTUALLY_BETTER")},
             "evidence_timestamp": row["imported_at"], "reviewed_at": row["imported_at"],
