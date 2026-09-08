@@ -1,0 +1,17 @@
+{
+  "wrapper_status": "PASS",
+  "exit_code": 0,
+  "mode": "deliver",
+  "type": "architecture",
+  "pinned_commit": "c6519401f7b91b9d43011657880893b0a8955548",
+  "started_at": "2026-09-08T14:54:07.9821080Z",
+  "finished_at": "2026-09-08T14:54:08.2343839Z",
+  "input": "D:\\personal-tech-intelligence\\user_artifacts\\architecture_atlas\\_evidence\\pti-chinese-03.architecture.json",
+  "output": "D:\\personal-tech-intelligence\\managed_capabilities\\archify\\outputs\\pti-chinese-03.html",
+  "output_exists": true,
+  "network_policy": "UPDATE_CHECK_DISABLED",
+  "browser_open": false,
+  "persistent_process": false,
+  "stdout": "{\n  \"schemaVersion\": 1,\n  \"ok\": true,\n  \"command\": \"deliver\",\n  \"type\": \"architecture\",\n  \"input\": \"D:\\\\personal-tech-intelligence\\\\user_artifacts\\\\architecture_atlas\\\\_evidence\\\\pti-chinese-03.architecture.json\",\n  \"output\": \"D:\\\\personal-tech-intelligence\\\\managed_capabilities\\\\archify\\\\outputs\\\\pti-chinese-03.html\",\n  \"specification\": {\n    \"sha256\": \"b210d23c44ff4f2b9d3fde26d4f2ae2708506d71b64ca668b6a4d412445e5f8f\",\n    \"bytes\": 2788\n  },\n  \"artifact\": {\n    \"sha256\": \"c5149d83cc1ac934d91f550c2cd33c2cba4d0b5b43ef2851692420ed53835417\",\n    \"bytes\": 712201\n  },\n  \"validation\": {\n    \"checksPassed\": 9,\n    \"checkCount\": 9,\n    \"compositionProfile\": \"showcase\",\n    \"compositionStatus\": \"pass\",\n    \"errors\": 0,\n    \"warnings\": 0\n  }\n}",
+  "stderr": ""
+}

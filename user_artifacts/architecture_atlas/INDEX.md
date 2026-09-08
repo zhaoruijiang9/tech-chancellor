@@ -1,5 +1,7 @@
 # PTI Architecture Atlas
 
+用户主入口已移至：`D:\项目架构图\总目录.html`。
+
 本目录是 `D:\personal-tech-intelligence` 的 Archify 实际使用产物。
 
 ## PTI 视图
