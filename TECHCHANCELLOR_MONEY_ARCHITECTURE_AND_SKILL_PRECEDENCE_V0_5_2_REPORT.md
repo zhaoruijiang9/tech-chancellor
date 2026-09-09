@@ -59,6 +59,7 @@
 - `REAL_USE_EVIDENCE = RECORDED`
 - Archify 能力库已更新为“已实际使用”，并记录了 PTI 与 D:\money 的真实使用证据。
 - `TEST_STATUS = 72/72 PASS`
+- `PTI_COMMIT = 38ee52d6135f7fcb2abf7906aa84928b8f41a6dd`
 - `PUSH = NO`
 
 ## 后续模式
