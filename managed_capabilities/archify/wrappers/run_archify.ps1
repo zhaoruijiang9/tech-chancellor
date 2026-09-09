@@ -50,9 +50,11 @@ function Assert-ProtectedAccess([string]$target, [string]$output) {
     if (-not $AuthorizationPath) { Stop-Safely 'Protected project access is denied by default; current-task authorization is required.' }
     $auth = Full-Path $AuthorizationPath
     if (-not (Test-Path -LiteralPath $auth -PathType Leaf)) { Stop-Safely 'Current-task authorization receipt is missing.' }
-    try { $receipt = Get-Content -LiteralPath $auth -Raw | ConvertFrom-Json } catch { Stop-Safely 'Current-task authorization receipt is invalid.' }
+    try { $rawReceipt = Get-Content -LiteralPath $auth -Raw; $receipt = $rawReceipt | ConvertFrom-Json } catch { Stop-Safely 'Current-task authorization receipt is invalid.' }
     if ($receipt.capability -ne 'Archify' -or $receipt.target_path.TrimEnd('\') -ine $targetFull.TrimEnd('\') -or $receipt.access_mode -ne 'READ_ONLY' -or $receipt.purpose -ne 'ARCHITECTURE_ANALYSIS' -or $receipt.output_boundary -ne 'OUTSIDE_TARGET_PROJECT' -or $receipt.authorization_source -ne 'DIRECT_USER_TASK_AUTHORIZATION' -or [string]::IsNullOrWhiteSpace($receipt.task_id) -or [string]::IsNullOrWhiteSpace($receipt.nonce)) { Stop-Safely 'Current-task authorization is not scoped to read-only architecture analysis.' }
-    try { if ([DateTimeOffset]::Parse($receipt.expires_at) -le [DateTimeOffset]::UtcNow) { Stop-Safely 'Current-task authorization has expired.' } } catch { Stop-Safely 'Current-task authorization expiry is invalid.' }
+    $expiryMatch = [regex]::Match($rawReceipt, '"expires_at"\s*:\s*"([^"]+)"')
+    if (-not $expiryMatch.Success) { Stop-Safely 'Current-task authorization expiry is missing.' }
+    try { if ([DateTimeOffset]::Parse($expiryMatch.Groups[1].Value) -le [DateTimeOffset]::UtcNow) { Stop-Safely 'Current-task authorization has expired.' } } catch { Stop-Safely 'Current-task authorization expiry is invalid.' }
     if ($output -match '(?i)^D:\\money(?:\\|$)') { Stop-Safely 'Protected project output is denied.' }
 }
 
@@ -104,6 +106,8 @@ $process = New-Object System.Diagnostics.Process
 $process.StartInfo = $psi
 $startedAt = (Get-Date).ToUniversalTime().ToString('o')
 if (-not $process.Start()) { Stop-Safely 'Could not start pinned Archify.' 70 }
+$stdoutTask = $process.StandardOutput.ReadToEndAsync()
+$stderrTask = $process.StandardError.ReadToEndAsync()
 $finished = $process.WaitForExit($TimeoutSeconds * 1000)
 if (-not $finished) {
     try { $process.Kill($true) } catch { }
@@ -111,8 +115,8 @@ if (-not $finished) {
     $receipt | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath ($outputFull + '.pti-receipt.json') -Encoding UTF8
     exit 124
 }
-$stdout = $process.StandardOutput.ReadToEnd()
-$stderr = $process.StandardError.ReadToEnd()
+$stdout = $stdoutTask.Result
+$stderr = $stderrTask.Result
 $exitCode = $process.ExitCode
 $receipt = [ordered]@{
     wrapper_status = if ($exitCode -eq 0) { 'PASS' } else { 'FAIL' }

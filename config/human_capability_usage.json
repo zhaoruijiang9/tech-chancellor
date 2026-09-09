@@ -6,7 +6,7 @@
     "expected_outputs": ["可交互 HTML", "SVG 或结构化架构图", "必要时的差异说明"],
     "user_entrypoint": "结果默认交付到 D:\\项目架构图；也可以直接对 Codex 说出项目路径和想看的图。",
     "automatic_use_policy": "相关架构任务中 Codex 可以自动建议；你明确说使用 Archify 时直接调用。",
-    "main_limitations": ["当前是受控试用，受控 wrapper 不接触 D:\\money。", "复杂项目的图仍需人工核对。"]
+    "main_limitations": ["受保护项目默认拒绝；只有当前任务明确授权、严格只读、使用脱敏快照且输出在项目外时才可使用。", "复杂项目的图仍需人工核对。"]
   },
   "bmad-code-org/BMAD-METHOD": {
     "human_summary": "提供先澄清需求、再规划、再实现和验证的结构化开发方法。",
