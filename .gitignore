@@ -8,6 +8,10 @@ inbox/
 reports/latest.*
 reports/prefilter_latest.*
 reports/current.*
+work/
+user_artifacts/
+*.sqlite
+*.sqlite3
 library/generated/
 *.log
 *.tmp

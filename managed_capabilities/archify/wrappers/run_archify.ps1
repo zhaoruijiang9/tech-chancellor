@@ -9,6 +9,7 @@ param(
     [string]$OutputPath,
     [string]$BasePath,
     [string]$HeadPath,
+    [string]$AuthorizationPath,
     [ValidateRange(10, 300)]
     [int]$TimeoutSeconds = 120
 )
@@ -38,7 +39,14 @@ function Full-Path([string]$value) {
 
 function Assert-Input([string]$value) {
     $full = Full-Path $value
-    if ($full -match '(?i)^D:\\money(?:\\|$)') { Stop-Safely 'D:\money is permanently blocked for Archify.' }
+    if ($full -match '(?i)^D:\\money(?:\\|$)') {
+        if (-not $AuthorizationPath) { Stop-Safely 'Protected project access is denied by default; current-task authorization is required.' }
+        $auth = Full-Path $AuthorizationPath
+        if (-not (Test-Path -LiteralPath $auth -PathType Leaf)) { Stop-Safely 'Current-task authorization receipt is missing.' }
+        try { $receipt = Get-Content -LiteralPath $auth -Raw | ConvertFrom-Json } catch { Stop-Safely 'Current-task authorization receipt is invalid.' }
+        if ($receipt.capability -ne 'Archify' -or $receipt.target_path.TrimEnd('\') -ine 'D:\money' -or $receipt.access_mode -ne 'READ_ONLY' -or $receipt.purpose -ne 'ARCHITECTURE_ANALYSIS' -or $receipt.output_boundary -ne 'OUTSIDE_TARGET_PROJECT' -or $receipt.authorization_source -ne 'DIRECT_USER_TASK_AUTHORIZATION' -or [string]::IsNullOrWhiteSpace($receipt.task_id) -or [string]::IsNullOrWhiteSpace($receipt.nonce)) { Stop-Safely 'Current-task authorization is not scoped to read-only architecture analysis.' }
+        try { if ([DateTimeOffset]::Parse($receipt.expires_at) -le [DateTimeOffset]::UtcNow) { Stop-Safely 'Current-task authorization has expired.' } } catch { Stop-Safely 'Current-task authorization expiry is invalid.' }
+    }
     if (-not (Test-Path -LiteralPath $full -PathType Leaf)) { Stop-Safely "Input file does not exist: $full" }
     return $full
 }

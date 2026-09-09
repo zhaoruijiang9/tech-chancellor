@@ -1,4 +1,6 @@
 @echo off
-cd /d D:\personal-tech-intelligence
+cd /d "%~dp0"
 set PYTHONUTF8=1
-D:\python\python.exe D:\personal-tech-intelligence\run.py stage-b >> D:\personal-tech-intelligence\state\chancellor.log 2>&1
+set "PYTHON=python"
+if exist "%~dp0.venv\Scripts\python.exe" set "PYTHON=%~dp0.venv\Scripts\python.exe"
+%PYTHON% "%~dp0run.py" stage-b >> "%~dp0state\chancellor.log" 2>&1

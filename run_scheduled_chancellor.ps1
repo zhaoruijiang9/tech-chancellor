@@ -1,8 +1,8 @@
 $ErrorActionPreference = 'Stop'
-$root = 'D:\personal-tech-intelligence'
+$root = (Resolve-Path (Join-Path $PSScriptRoot '.')).Path
 $state = Join-Path $root 'state'
 $psi = [Diagnostics.ProcessStartInfo]::new()
-$psi.FileName = 'D:\python\python.exe'
+$psi.FileName = if (Test-Path (Join-Path $root '.venv\Scripts\python.exe')) { Join-Path $root '.venv\Scripts\python.exe' } elseif (Get-Command python -ErrorAction SilentlyContinue) { (Get-Command python).Source } else { throw 'Python 3 is required.' }
 $psi.WorkingDirectory = $root
 $psi.UseShellExecute = $false
 $psi.CreateNoWindow = $true

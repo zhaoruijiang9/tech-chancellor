@@ -15,7 +15,7 @@ from .models import utc_now
 from .activation_runtime import postprocess_semantic_decision, process_activation_queue
 from .human_toolbox import build_human_toolbox
 
-CODEX_EXE = Path(os.environ.get("PTI_CODEX_EXE", r"C:\Users\25654\AppData\Roaming\npm\node_modules\@openai\codex\node_modules\@openai\codex-win32-x64\vendor\x86_64-pc-windows-msvc\bin\codex.exe"))
+CODEX_EXE = Path(os.environ.get("PTI_CODEX_EXE", str(Path.home() / "AppData/Roaming/npm/node_modules/@openai/codex/node_modules/@openai/codex-win32-x64/vendor/x86_64-pc-windows-msvc/bin/codex.exe")))
 
 
 def _prompt(packet: dict[str, Any]) -> str:

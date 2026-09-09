@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "authorization_source": "DIRECT_USER_TASK_AUTHORIZATION",
+  "capability": "Archify",
+  "target_path": "D:\\protected-project",
+  "access_mode": "READ_ONLY",
+  "purpose": "ARCHITECTURE_ANALYSIS",
+  "output_boundary": "OUTSIDE_TARGET_PROJECT",
+  "task_id": "replace-with-current-task-id",
+  "expires_at": "2099-01-01T00:00:00Z",
+  "nonce": "replace-with-random-single-task-nonce"
+}
