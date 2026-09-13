@@ -1,47 +1,55 @@
-# TECHCHANCELLOR PRIVATE GITHUB INITIAL PUSH V0.6 REPORT
+# TECHCHANCELLOR PRIVATE GITHUB INITIAL PUSH V0.6
 
-## 当前结论
+## 结果
 
-- `TASK_STATUS = BLOCKED_EXTERNAL_GITHUB_ACCESS`
-- `FIRST_REAL_BLOCKER = GitHub connection closed before authentication/repository creation`
-- `LOCAL_REPOSITORY = D:\personal-tech-intelligence`
-- `START_HEAD = 0158847e6143b84b7ef796f8e1609dc4e3a54797`
-- `END_HEAD = 0158847e6143b84b7ef796f8e1609dc4e3a54797`
-- `BRANCH = master`
-- `WORKTREE = CLEAN`
-- `EXISTING_REMOTES = NONE`
-
-## GitHub
-
-- `OWNER = zhaoruij97-art` (由已登录浏览器页面确认)
+- `TASK_STATUS = PASS`
+- `GITHUB_AUTH = GCM_AUTHENTICATED`
+- `GITHUB_ACCOUNT = zhaoruijiang9`
+- `GITHUB_USER_ID = VERIFIED_BY_GITHUB_API`
 - `REPOSITORY = tech-chancellor`
-- `VISIBILITY = NOT_CREATED`
-- `REMOTE_NAME = origin`
-- `REMOTE_URL = NOT_CREATED`
-- `FIRST_PUSH = NOT_ATTEMPTED`
+- `VISIBILITY = PRIVATE`
+- `REPOSITORY_URL = https://github.com/zhaoruijiang9/tech-chancellor`
+- `REMOTE = origin`
+- `BRANCH = master`
+- `FIRST_PUSH = PASS`
+- `UPSTREAM = PASS`
+- `LOCAL_REMOTE_SYNC = PASS`
+- `AUTO_PUSH_AFTER_TASK = NO`
 
-`gh auth status` 显示命令行尚未认证。启动官方 device authorization 时，GitHub 接口连接中断；已登录浏览器打开新建仓库页面同样返回 `ERR_CONNECTION_CLOSED`。因此没有创建仓库、添加 remote 或进行 push。
+## 本地与远端
 
-## 隐私和边界
+- `START_HEAD = 66191ff2682e672a4cb19dfe0e08aa771c1da8a0`
+- `LOCAL_HEAD = 66191ff2682e672a4cb19dfe0e08aa771c1da8a0`
+- `REMOTE_HEAD = 66191ff2682e672a4cb19dfe0e08aa771c1da8a0`
+- 当前 `master` 已跟踪 `origin/master`，状态为 up to date。
+- 本报告随后作为本地文档提交；该文档提交也会按本轮明确授权同步到远端。
+
+## 隐私与边界
 
 - `FULL_HISTORY_SCAN = REUSED_PREVIOUS_PASS`
-- `INCREMENTAL_SCAN = NOT_REQUIRED, no new code commit after previous verified state`
+- `INCREMENTAL_SCAN = PASS, no sensitive content in new local commits`
 - `PRIVATE_RUNTIME_TRACKED = NO`
 - `D_MONEY_CONTENT_TRACKED = NO`
 - `USER_ARCHITECTURE_OUTPUT_TRACKED = NO`
-- `D:\money = NOT_ACCESSED`
 - `FORCE_PUSH = NEVER`
 - `HISTORY_REWRITE = NONE`
+- `D:\money = NOT_ACCESSED`
 
-本轮未重做公共发布加固、历史清理、许可证选择、Actions、标签或其他非必要 GitHub 设置。
+`git ls-files` 未发现 runtime SQLite、日志、锁、quarantine、node_modules、授权回执、保护项目快照、持仓/订单/成交数据或 `D:\项目架构图` 内容。
 
-## 策略
+## Git identity
+
+- `OLD_LOCAL_EMAIL = 307136752+zhaoruiji97-art@users.noreply.github.com`
+- `NEW_LOCAL_EMAIL = NOT_RELIABLY_AVAILABLE`
+- `IDENTITY_UPDATE = PENDING_EXACT_NOREPLY_CONFIRMATION`
+
+新账号已由 GitHub API 确认为 `zhaoruijiang9`；当前 GitHub token 没有读取邮箱列表的权限，因此没有猜测或伪造新的 noreply 地址，也没有改写旧提交作者。
+
+## 发布范围
 
 - `THIS_TASK_PUSH_AUTHORIZATION = YES`
-- `AUTO_PUSH_AFTER_TASK = NO_BY_DEFAULT`
 - `PUBLIC_V0_1 = NOT_PERFORMED`
 - `LICENSE = NOT_SELECTED`
-
-## 待继续
-
-网络恢复且 GitHub CLI 完成认证后，从仓库创建、remote 配置、当前 `master` 首次 push、upstream、remote SHA 和 Private 可见性核验继续；不需要访问 D:\money。
+- 未创建 Actions、Wiki、Pages、Release、Tag 或分支保护。
+- `FIRST_REAL_BLOCKER = NONE`
+- `NEXT_MODE = NORMAL_DEVELOPMENT_WITH_PRIVATE_GITHUB_REMOTE`
