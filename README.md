@@ -39,3 +39,13 @@ TechChancellor 采用 **SAFE_BY_CONTAINMENT**：不自动全局安装、不自�
 ## 发布状态
 
 当前为 `v0.x` 预发布版本。私有 GitHub 准备度见 `TECHCHANCELLOR_PRE_PUBLICATION_AND_PROTECTED_ACCESS_V0_5_REPORT.md`。未来公开仓库建议名称：`tech-chancellor`。本仓库不包含用户个人运行数据库、日志、交易数据或 `D:\项目架构图` 产物。
+
+## Feedback and Contact
+
+If you use TechChancellor, feedback on bugs, user experience, capability recommendations, and product design is welcome.
+
+- Bugs and feature ideas: GitHub Issues
+- Public discussion: the GitHub Discussions channel will be enabled with the public release.
+- Private contact: `2565455406@qq.com`
+
+Useful feedback includes which discoveries are valuable or noisy, which capabilities deserve activation, whether activation boundaries are too conservative or aggressive, installation difficulties, Codex retrieval usefulness, and Windows/Codex compatibility issues.
