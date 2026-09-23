@@ -30,6 +30,13 @@ def _latest(connection, table: str) -> dict | None:
     return dict(row) if row else None
 
 
+def _task_belongs_to_root(task: dict, root: Path) -> bool:
+    action = str(task.get("action", "")).lower()
+    if not action or action == "unknown":
+        return False
+    return str(root).lower().replace("/", "\\") in action.replace("/", "\\")
+
+
 def health_report(root: str | Path) -> dict:
     root = Path(root).resolve()
     state = root / "state"
@@ -74,7 +81,8 @@ def health_report(root: str | Path) -> dict:
             stale_locks.append(name)
     tasks = [_task(r"\PersonalTechIntelligence\PTI-Radar-Scan"),
              _task(r"\PersonalTechIntelligence\PTI-Chancellor")]
-    task_failures = [task["name"] for task in tasks if task.get("last_result") not in {"0", "UNKNOWN"}]
+    task_failures = [task["name"] for task in tasks
+                     if _task_belongs_to_root(task, root) and task.get("last_result") not in {"0", "UNKNOWN"}]
     active = active_pending_count(root / "chancellor_pending")
     status = "HEALTHY"
     issues = []

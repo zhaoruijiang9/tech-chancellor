@@ -23,7 +23,7 @@ class BootstrapTests(unittest.TestCase):
             self.assertEqual(second["created_directories"], [])
             self.assertTrue((root / "state" / "intelligence.db").is_file())
             report = health_report(root)
-            self.assertNotEqual(report["status"], "NOT_INITIALIZED")
+            self.assertIn(report["status"], {"HEALTHY", "DEGRADED_HISTORY_ONLY"})
             self.assertEqual(report["decision_history_count"], 0)
 
     def test_health_reports_missing_database_without_crashing(self):
