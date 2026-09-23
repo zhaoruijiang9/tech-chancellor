@@ -52,6 +52,22 @@ def _safe_date_sort(value: str | None) -> str:
     return value or ""
 
 
+def _human_activity_status(value: str | None) -> str:
+    mapping = {
+        "SCAN_SUCCESS": "扫描完成",
+        "SCAN_NOT_EVALUATED": "扫描需要注意",
+        "SCAN_SUCCESS_NO_HIGH_SIGNAL": "扫描完成，无高信号结果",
+        "REFERENCE_ONLY": "知识库 / 方法参考",
+        "CANDIDATE_FOR_QUARANTINE": "进入验证",
+        "ACTIVE_PATTERN": "已启用的方法",
+        "USED": "已经实际使用",
+        "BLOCKED_HUMAN": "需要人工决定",
+        "FAILED_WITH_EXPLAINED_REASON": "验证失败 / 暂不采用",
+        "FAILED_TERMINAL": "验证失败 / 暂不采用",
+    }
+    return mapping.get(value or "", LIFECYCLE_LABELS.get(value or "", value or "暂无"))
+
+
 class DashboardReadModel:
     """Read-only projection over the existing PTI SQLite state."""
 
@@ -166,7 +182,8 @@ class DashboardReadModel:
             events: list[dict[str, Any]] = []
             if self._table_exists(connection, "scan_runs"):
                 for row in connection.execute("SELECT * FROM scan_runs ORDER BY started_at DESC LIMIT 20"):
-                    events.append({"type": "radar", "time": row["started_at"], "title": "Radar 扫描", "repository": "", "status": row["status"] or "运行中", "detail": f"候选 {row['candidate_count']} 个，失败 {row['failure_count']} 个"})
+                    raw_status = row["status"] or "运行中"
+                    events.append({"type": "radar", "time": row["started_at"], "title": "Radar 扫描", "repository": "", "status": _human_activity_status(raw_status), "machine_status": raw_status, "detail": f"候选 {row['candidate_count']} 个，失败 {row['failure_count']} 个"})
             if self._table_exists(connection, "chancellor_decision_history"):
                 rows = connection.execute("""
                     SELECT h.*, r.canonical_owner_repo, r.url
@@ -176,7 +193,8 @@ class DashboardReadModel:
                 """).fetchall()
                 for row in rows:
                     decision = _json(row["decision_json"], {})
-                    events.append({"type": "chancellor", "time": row["imported_at"], "title": "Chancellor 判断", "repository": row["canonical_owner_repo"] or "未知项目", "url": row["url"], "status": decision.get("ACTION", "已判断"), "detail": decision.get("WHAT_IS_IT", "")})
+                    raw_status = decision.get("ACTION", "已判断")
+                    events.append({"type": "chancellor", "time": row["imported_at"], "title": "Chancellor 判断", "repository": row["canonical_owner_repo"] or "未知项目", "url": row["url"], "status": _human_activity_status(raw_status), "machine_status": raw_status, "detail": decision.get("WHAT_IS_IT", "")})
             if self._table_exists(connection, "activation_records"):
                 rows = connection.execute("""
                     SELECT a.*, r.canonical_owner_repo, r.url
@@ -185,7 +203,8 @@ class DashboardReadModel:
                     ORDER BY a.updated_at DESC LIMIT 30
                 """).fetchall()
                 for row in rows:
-                    events.append({"type": "activation", "time": row["updated_at"], "title": "能力状态变化", "repository": row["canonical_owner_repo"] or "未知项目", "url": row["url"], "status": row["activation_state"], "detail": row["notes"] or ""})
+                    raw_status = row["activation_state"]
+                    events.append({"type": "activation", "time": row["updated_at"], "title": "能力状态变化", "repository": row["canonical_owner_repo"] or "未知项目", "url": row["url"], "status": _human_activity_status(raw_status), "machine_status": raw_status, "detail": row["notes"] or ""})
             events.sort(key=lambda item: _safe_date_sort(item.get("time")), reverse=True)
             return events[:max(1, limit)]
         finally:
