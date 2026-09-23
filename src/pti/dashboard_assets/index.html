@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="/assets/app.css">
 </head>
 <body>
-  <header class="topbar"><div class="brand"><span class="brand-mark">丞</span><div><strong>技术丞相</strong><small>TechChancellor Control Center</small></div></div><div class="top-actions"><button class="button quiet" data-action="refresh">刷新</button><span id="last-refresh">正在连接…</span></div></header>
+  <header class="topbar"><div class="brand"><span class="brand-mark" aria-hidden="true">丞</span><div><strong>技术丞相</strong><small>个人技术情报控制中心</small></div></div><div class="top-actions"><span id="global-health" class="health-indicator">● 连接中</span><label class="theme-control"><span>主题</span><select id="theme-select" aria-label="界面主题"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label><button class="button quiet" data-action="refresh">刷新</button><span id="last-refresh">正在连接…</span></div></header>
   <div class="shell"><nav class="nav" aria-label="主导航">
     <button class="nav-item active" data-view="home">首页</button><button class="nav-item" data-view="capabilities">能力库</button><button class="nav-item" data-view="activity">最近动态</button><button class="nav-item" data-view="system">系统状态</button><button class="nav-item" data-view="documents">文档</button>
   </nav><main id="app" class="content" aria-live="polite"></main></div>

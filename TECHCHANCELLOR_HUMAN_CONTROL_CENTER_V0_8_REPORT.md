@@ -54,3 +54,16 @@ The dashboard is a read-only view over the existing SQLite/PTI state. It does no
 
 LOCAL_COMMITS = local only; final implementation commit recorded in Git history
 PUSH = NO
+
+## V0.8.2_VISUAL_POLISH
+
+CHINESE_FIRST_UI = PASS; primary navigation, capability states, categories, activity labels, system notices, and document entry points use human-readable Chinese presentation.
+RAW_MACHINE_LABELS_VISIBLE = PASS; raw values remain available only in deliberate technical-detail areas and are not the primary card or status language.
+VISUAL_HIERARCHY = PASS; topbar, navigation, page header, summary metrics, content panels, and secondary source metadata have distinct visual levels.
+CAPABILITY_CARD_POLISH = PASS; human capability name and purpose lead, repository slug is secondary, semantic status chips and detail disclosure are present.
+FILTER_POLISH = PASS; search, status, category, result count, and responsive layout are available without changing API data.
+LIGHT_MODE = PASS; default light theme with persisted local preference.
+DARK_MODE = PASS; explicit dark theme and system-following fallback with persisted local preference.
+DOCUMENT_READER = PASS; document library and local reader received clearer hierarchy and back navigation.
+VISUAL_ACCEPTANCE = PASS; inspected real localhost dashboard at desktop size after the visual pass; narrow responsive rules were verified by CSS/source checks.
+TESTS = 80 passed, 1 existing launcher-file test error; the error is caused by the separately pre-existing deletion of `打开技术丞相.cmd` in the working tree, not by the visual assets.
