@@ -40,16 +40,18 @@ python run.py my-capabilities
 
 TechChancellor 采用 **SAFE_BY_CONTAINMENT**：不自动全局安装、不自动连接账户、不自动下单；第三方能力必须固定版本并经过隔离/静态检查。受保护项目默认拒绝访问，只有当前任务提供路径、目的和只读范围明确的授权时，受控 wrapper 才可读取架构信息，输出必须在目标项目之外。
 
-## 发布状态
+## Release Status
 
-当前为 `v0.x` 预发布版本。私有 GitHub 准备度见 `TECHCHANCELLOR_PRE_PUBLICATION_AND_PROTECTED_ACCESS_V0_5_REPORT.md`。未来公开仓库建议名称：`tech-chancellor`。本仓库不包含用户个人运行数据库、日志、交易数据或 `D:\项目架构图` 产物。
+`v0.1.0` is an early public release and personal developer tool, licensed under Apache-2.0. It does not claim enterprise readiness, full autonomy, or a stable API guarantee. The repository does not include personal runtime databases, logs, trading data, or `D:\项目架构图` artifacts.
+
+License: [Apache-2.0](LICENSE)
 
 ## Feedback and Contact
 
 If you use TechChancellor, feedback on bugs, user experience, capability recommendations, and product design is welcome.
 
 - Bugs and feature ideas: GitHub Issues
-- Public discussion: the GitHub Discussions channel will be enabled with the public release.
+- Public discussion: [GitHub Discussions](https://github.com/zhaoruijiang9/tech-chancellor/discussions)
 - Private contact: `2565455406@qq.com`
 
 Useful feedback includes which discoveries are valuable or noisy, which capabilities deserve activation, whether activation boundaries are too conservative or aggressive, installation difficulties, Codex retrieval usefulness, and Windows/Codex compatibility issues.

@@ -4,8 +4,8 @@ TechChancellor is a personal, safety-focused project for AI-assisted technical i
 
 ## What to share
 
-- Report bugs and installation problems through GitHub Issues.
-- Share feature ideas or design feedback through GitHub Issues.
+- Report bugs and installation problems through [GitHub Issues](https://github.com/zhaoruijiang9/tech-chancellor/issues).
+- Share feature ideas or design feedback through [GitHub Discussions](https://github.com/zhaoruijiang9/tech-chancellor/discussions) or GitHub Issues.
 - Recommend useful AI, agent, quant, data, or developer projects.
 - Tell us which discoveries are useful or noisy, and whether activation boundaries feel too conservative or aggressive.
 - Report Windows/Codex compatibility problems and whether retrieval actually saves search time.
@@ -16,4 +16,4 @@ Keep changes focused, explain the user value, preserve the safety boundaries, an
 
 ## Security
 
-Do not publish credentials or other sensitive security information in an Issue or pull request. For private contact, email `2565455406@qq.com`. Public Issues are the planned primary feedback channel after the public release; GitHub Discussions will be enabled with that release.
+Do not publish credentials or other sensitive security information in an Issue or pull request. For private contact, email `2565455406@qq.com`. Issues are the primary bug and feature channel; Discussions are for open design, usage, and capability conversations.

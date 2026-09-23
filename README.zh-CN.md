@@ -20,12 +20,18 @@ python run.py my-capabilities
 
 系统默认不安装、执行或连接第三方项目，不连接交易账户，也不自动下单。运行 `python run.py my-capabilities` 后会生成本机能力清单；该文件包含本机状态，不应提交到公共仓库。完整说明见 `README.md`。
 
+## 发布状态
+
+`v0.1.0` 是一个早期公开版本和个人开发者工具，采用 Apache-2.0 许可证。不宣称面向所有人的生产就绪、企业级能力、完全自治或稳定 API 保证。
+
+许可证：[Apache-2.0](LICENSE)
+
 ## 反馈与交流
 
 如果你正在使用 TechChancellor，欢迎反馈 bug、使用体验、能力推荐或产品设计建议。
 
 - Bug / 功能建议：GitHub Issues
-- 公开讨论：Public release 后启用 GitHub Discussions
+- 公开讨论：[GitHub Discussions](https://github.com/zhaoruijiang9/tech-chancellor/discussions)
 - 私下联系：`2565455406@qq.com`
 
 特别欢迎反馈哪些技术发现真正有用、哪些推荐是噪声、哪些 capability 值得自动激活、激活边界是否过于保守或激进、新用户安装是否困难、Codex 检索是否节省搜索时间，以及 Windows/Codex 环境兼容性问题。
