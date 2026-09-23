@@ -17,7 +17,7 @@ python run.py my-capabilities
 
 `init` 是幂等操作，可以安全重复运行。也可以先用 `python -m venv .venv` 创建隔离环境，再使用 `.venv\Scripts\python.exe` 执行上述命令。网络扫描是公开 GitHub 数据的手动 dry-run；Codex 语义审查和 Windows 计划任务都是可选配置，不会在初始化时偷偷启用。
 
-系统默认不安装、执行或连接第三方项目，不连接交易账户，也不自动下单。完整说明见 `README.md`。
+系统默认不安装、执行或连接第三方项目，不连接交易账户，也不自动下单。运行 `python run.py my-capabilities` 后会生成本机能力清单；该文件包含本机状态，不应提交到公共仓库。完整说明见 `README.md`。
 
 ## 反馈与交流
 

@@ -10,6 +10,7 @@ reports/prefilter_latest.*
 reports/current.*
 work/
 user_artifacts/
+MY_CAPABILITIES.md
 *.sqlite
 *.sqlite3
 library/generated/
