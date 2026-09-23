@@ -23,6 +23,7 @@
 需要 Python 3.11+、Git；网络扫描使用公开 GitHub REST API。项目运行时使用 Python 标准库，不要求第三方包安装。进入项目根目录后，先初始化一次本地运行目录和 SQLite 数据库：
 
 ```powershell
+$env:PYTHONUTF8 = "1"
 $env:PYTHONPATH = "$PWD\src"
 python run.py init
 python run.py health

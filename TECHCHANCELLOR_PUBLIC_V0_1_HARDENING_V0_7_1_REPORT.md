@@ -22,7 +22,7 @@ No engineering blocker remains in the audited public path. Publication still req
 
 ## Verification
 
-- Unit tests: `74` passed.
+- Unit tests: `74` passed with `PYTHONUTF8=1` (the documented Windows runtime setting).
 - Python compilation: passed for `src` and `run.py`.
 - Diff whitespace check: passed.
 - Fresh local clone smoke: `init=0`, `health=0`, `build-library=0`, `my-capabilities=0`; SQLite created; generated capability output remained ignored.

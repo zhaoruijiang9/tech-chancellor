@@ -7,6 +7,7 @@
 需要 Python 3.11+ 和 Git。项目运行时只使用 Python 标准库，不要求联网安装第三方包。进入项目根目录后，先初始化本地运行目录和 SQLite 数据库：
 
 ```powershell
+$env:PYTHONUTF8 = "1"
 $env:PYTHONPATH = "$PWD\src"
 python run.py init
 python run.py health
