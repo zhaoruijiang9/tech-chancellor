@@ -107,6 +107,7 @@ def open_desktop_window(url: str) -> None:
 
 def open_in_obsidian(root: Path) -> bool:
     candidates = [
+        Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "Obsidian" / "Obsidian.exe",
         Path(os.environ.get("PROGRAMFILES", "")) / "Obsidian" / "Obsidian.exe",
         Path(os.environ.get("PROGRAMFILES(X86)", "")) / "Obsidian" / "Obsidian.exe",
         Path(os.environ.get("LOCALAPPDATA", "")) / "Obsidian" / "Obsidian.exe",

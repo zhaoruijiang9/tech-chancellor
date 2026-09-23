@@ -18,6 +18,8 @@ python run.py my-capabilities
 
 `init` 是幂等操作，可以安全重复运行。也可以先用 `python -m venv .venv` 创建隔离环境，再使用 `.venv\Scripts\python.exe` 执行上述命令。网络扫描是公开 GitHub 数据的手动 dry-run；Codex 语义审查和 Windows 计划任务都是可选配置，不会在初始化时偷偷启用。
 
+初始化后，直接双击项目根目录的 `打开技术丞相.cmd`，即可打开本地只读的技术丞相控制台。默认使用浏览器的桌面应用窗口模式，仅绑定 `127.0.0.1`；调试或备用时可以运行 `python run.py dashboard --browser`，自动化检查可以使用 `python run.py dashboard --no-browser`。控制台会展示最近发现、正在验证、已投入使用、知识库方法、系统状态和项目文档，不需要直接打开 SQLite。
+
 系统默认不安装、执行或连接第三方项目，不连接交易账户，也不自动下单。运行 `python run.py my-capabilities` 后会生成本机能力清单；该文件包含本机状态，不应提交到公共仓库。完整说明见 `README.md`。
 
 ## 发布状态

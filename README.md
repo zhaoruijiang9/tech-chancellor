@@ -36,6 +36,10 @@ python run.py my-capabilities
 
 `init` 是幂等操作，可安全重复运行。`scan` 默认是公开 GitHub 数据的手动 dry-run；Codex 语义审查和 Windows 计划任务均为可选的后续配置，不会在初始化时自动启用。
 
+## Human Control Center
+
+After initialization, double-click `打开技术丞相.cmd` to open the local read-only Control Center. It starts a loopback-only desktop-style browser window by default. For a normal browser window or automated checks, use `python run.py dashboard --browser` or `python run.py dashboard --no-browser`. The dashboard shows recent discoveries, validation, directly usable capabilities, knowledge patterns, system status, and project documents without exposing the SQLite database directly.
+
 ## 安全边界
 
 TechChancellor 采用 **SAFE_BY_CONTAINMENT**：不自动全局安装、不自动连接账户、不自动下单；第三方能力必须固定版本并经过隔离/静态检查。受保护项目默认拒绝访问，只有当前任务提供路径、目的和只读范围明确的授权时，受控 wrapper 才可读取架构信息，输出必须在目标项目之外。
