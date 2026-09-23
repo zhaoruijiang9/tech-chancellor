@@ -20,17 +20,20 @@
 
 ## 快速开始（Windows）
 
-需要 Python 3.11+、Git；网络扫描使用公开 GitHub REST API。项目运行时使用 Python 标准库，不要求第三方包安装。进入项目根目录后：
+需要 Python 3.11+、Git；网络扫描使用公开 GitHub REST API。项目运行时使用 Python 标准库，不要求第三方包安装。进入项目根目录后，先初始化一次本地运行目录和 SQLite 数据库：
 
 ```powershell
 $env:PYTHONPATH = "$PWD\src"
+python run.py init
 python run.py health
 python run.py scan --dry-run
 python run.py build-library
 python run.py my-capabilities
 ```
 
-首次使用请先阅读 `MY_CAPABILITIES.md` 和 `docs/CURRENT_PROJECT_STATE.md`。Windows 计划任务是可选部署步骤，不会由基础命令偷偷创建。
+如果希望隔离 Python 环境，可先运行 `python -m venv .venv`，再用 `.venv\Scripts\python.exe` 替换上面的 `python`；项目没有需要联网安装的第三方 Python 依赖。首次使用请先阅读 `MY_CAPABILITIES.md` 和 `docs/CURRENT_PROJECT_STATE.md`。Windows 计划任务是可选部署步骤，不会由基础命令偷偷创建。
+
+`init` 是幂等操作，可安全重复运行。`scan` 默认是公开 GitHub 数据的手动 dry-run；Codex 语义审查和 Windows 计划任务均为可选的后续配置，不会在初始化时自动启用。
 
 ## 安全边界
 

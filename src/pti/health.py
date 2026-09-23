@@ -34,6 +34,18 @@ def health_report(root: str | Path) -> dict:
     root = Path(root).resolve()
     state = root / "state"
     db_path = state / "intelligence.db"
+    if not db_path.is_file():
+        return {
+            "status": "NOT_INITIALIZED",
+            "active_pending": 0,
+            "locks": {"scan.lock": "ABSENT", "chancellor.lock": "ABSENT"},
+            "tasks": [],
+            "latest_scan_run": None,
+            "latest_stage_b_run": None,
+            "decision_history_count": 0,
+            "unique_decision_repositories": 0,
+            "issues": ["DATABASE_NOT_INITIALIZED"],
+        }
     connection = sqlite3.connect(f"file:{db_path.as_posix()}?mode=ro", uri=True)
     try:
         connection.row_factory = sqlite3.Row

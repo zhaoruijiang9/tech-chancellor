@@ -12,11 +12,12 @@ from pti.health import health_report
 from pti.capability_library import build_library
 from pti.capability_search import search_capabilities
 from pti.human_toolbox import build_human_toolbox
+from pti.bootstrap import initialize_project
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Manual Phase 1 technology intelligence run")
-    parser.add_argument("action", nargs="?", choices=["scan", "stage-b", "feedback", "pending-count", "health", "build-library", "my-capabilities", "search-capabilities"], default="scan")
+    parser.add_argument("action", nargs="?", choices=["init", "scan", "stage-b", "feedback", "pending-count", "health", "build-library", "my-capabilities", "search-capabilities"], default="scan")
     parser.add_argument("repo", nargs="?")
     parser.add_argument("label", nargs="?")
     parser.add_argument("note", nargs="?", default="")
@@ -33,6 +34,10 @@ def main() -> int:
     parser.add_argument("--format", choices=["json"], default="json")
     args = parser.parse_args()
     root = Path(__file__).parent
+    if args.action == "init":
+        result = initialize_project(root, root / args.config, root / args.capability_profile)
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0
     if args.action == "pending-count":
         print(active_pending_count(root / "chancellor_pending"))
         return 0
