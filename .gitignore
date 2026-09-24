@@ -12,6 +12,7 @@ work/
 user_artifacts/
 MY_CAPABILITIES.md
 .obsidian/
+.superpowers/
 *.sqlite
 *.sqlite3
 library/generated/

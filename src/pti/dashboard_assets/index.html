@@ -9,33 +9,26 @@
 </head>
 <body>
   <div class="app-shell">
-    <aside class="app-rail">
-      <div class="rail-brand">
+    <header class="app-chrome">
+      <button class="brand" data-view="home" aria-label="返回首页">
         <span class="brand-seal" aria-hidden="true">丞</span>
-        <div><strong>技术丞相</strong><small>TechChancellor</small></div>
-      </div>
+        <span><strong>技术丞相</strong><small>TechChancellor</small></span>
+      </button>
       <nav class="nav" aria-label="主导航">
         <button class="nav-item active" data-view="home"><span class="nav-icon">⌂</span><span>首页</span></button>
         <button class="nav-item" data-view="capabilities"><span class="nav-icon">◇</span><span>能力库</span></button>
-        <button class="nav-item" data-view="activity"><span class="nav-icon">↻</span><span>最近动态</span></button>
-        <button class="nav-item" data-view="system"><span class="nav-icon">◌</span><span>系统状态</span></button>
+        <button class="nav-item" data-view="activity"><span class="nav-icon">↻</span><span>动态</span></button>
+        <button class="nav-item" data-view="system"><span class="nav-icon">◌</span><span>状态</span></button>
         <button class="nav-item" data-view="documents"><span class="nav-icon">▤</span><span>文档</span></button>
       </nav>
-      <div class="rail-footer">
+      <div class="chrome-actions">
         <button id="global-health" class="rail-health" data-view="system"><span class="pulse-dot"></span><span>正在连接</span></button>
-        <span id="last-refresh">读取本地数据中</span>
+        <label class="theme-control"><span>外观</span><select id="theme-select" aria-label="界面主题"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+        <button class="icon-button" data-action="refresh" title="刷新本地数据" aria-label="刷新本地数据">↻</button>
       </div>
-    </aside>
-    <section class="workspace">
-      <header class="command-bar">
-        <div class="command-context"><span>个人技术情报</span><strong id="current-view-label">总览</strong></div>
-        <div class="command-actions">
-          <label class="theme-control"><span>外观</span><select id="theme-select" aria-label="界面主题"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
-          <button class="icon-button" data-action="refresh" title="刷新本地数据" aria-label="刷新本地数据">↻</button>
-        </div>
-      </header>
-      <main id="app" class="content" aria-live="polite"></main>
-    </section>
+    </header>
+    <main id="app" class="content" aria-live="polite"></main>
+    <footer class="app-meta"><span id="current-view-label">总览</span><span id="last-refresh">读取本地数据中</span></footer>
   </div>
   <script src="/assets/app.js"></script>
 </body>

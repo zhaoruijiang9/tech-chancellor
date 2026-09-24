@@ -41,6 +41,11 @@ class DashboardServerTests(unittest.TestCase):
                 self.assertEqual(payload["counts"]["total"], 0)
                 with urlopen(url + "/api/documents") as response:
                     self.assertIn("items", json.loads(response.read().decode("utf-8")))
+                for asset in ("advisor-studio-v2.png", "capability-studio-v2.png"):
+                    with self.subTest(asset=asset):
+                        with urlopen(url + "/assets/" + asset) as response:
+                            self.assertEqual(response.headers.get_content_type(), "image/png")
+                            self.assertGreater(len(response.read()), 1000)
                 with self.assertRaises(HTTPError):
                     urlopen(url + "/api/document?path=../README.md")
             finally:

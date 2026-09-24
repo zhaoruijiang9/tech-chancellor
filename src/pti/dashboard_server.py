@@ -154,6 +154,12 @@ class DashboardServer:
 
         class Handler(BaseHTTPRequestHandler):
             server_version = "TechChancellorDashboard/0.8"
+            static_assets = {
+                "app.css": "text/css; charset=utf-8",
+                "app.js": "text/javascript; charset=utf-8",
+                "advisor-studio-v2.png": "image/png",
+                "capability-studio-v2.png": "image/png",
+            }
 
             def log_message(self, format: str, *args: object) -> None:
                 return
@@ -176,11 +182,13 @@ class DashboardServer:
                     if path in {"/", "/index.html"}:
                         self._send(200, (asset_root / "index.html").read_bytes(), "text/html; charset=utf-8")
                         return
-                    if path in {"/app.css", "/assets/app.css"}:
-                        self._send(200, (asset_root / "app.css").read_bytes(), "text/css; charset=utf-8")
-                        return
-                    if path in {"/app.js", "/assets/app.js"}:
-                        self._send(200, (asset_root / "app.js").read_bytes(), "text/javascript; charset=utf-8")
+                    if path in {"/app.css", "/app.js"}:
+                        path = "/assets/" + path.rsplit("/", 1)[1]
+                    if path.startswith("/assets/"):
+                        name = path.removeprefix("/assets/")
+                        if name in self.static_assets and Path(name).name == name:
+                            self._send(200, (asset_root / name).read_bytes(), self.static_assets[name])
+                            return
                         return
                     if path == "/api/summary":
                         self._api(model.snapshot())

@@ -18,10 +18,27 @@ class DashboardAssetTests(unittest.TestCase):
         self.assertNotIn('<details class="details">', self.script)
 
     def test_dashboard_has_product_shell_and_quiet_state_styles(self):
-        self.assertIn("app-rail", self.html)
-        self.assertIn("overview-grid", self.styles)
+        self.assertIn("app-chrome", self.html)
+        self.assertIn("home-stage", self.styles)
+        self.assertIn("capability-gallery", self.styles)
         self.assertIn("quiet-state", self.styles)
         self.assertIn("focus-visible", self.styles)
+
+    def test_art_direction_uses_local_assets_and_real_html(self):
+        self.assertIn("advisor-studio-v2.png", self.styles)
+        self.assertIn("capability-studio-v2.png", self.styles)
+        self.assertIn("deskmat-stage", self.styles)
+        self.assertIn("intelligence-veil", self.styles)
+        self.assertIn("home-focus", self.script)
+        self.assertIn("gallery-card", self.script)
+        self.assertNotIn("https://", self.styles)
+
+    def test_motion_is_subtle_restartable_and_non_looping(self):
+        self.assertIn("function restartViewEntrance", self.script)
+        self.assertIn("stage-intro", self.styles)
+        self.assertIn('body[data-view="home"] .content', self.styles)
+        self.assertNotIn("animation: pulse", self.styles)
+        self.assertNotIn("home-focus glass-panel", self.script)
 
     def test_normal_ui_keeps_machine_labels_out_of_primary_cards(self):
         card_start = self.script.index("function capabilityCard")
