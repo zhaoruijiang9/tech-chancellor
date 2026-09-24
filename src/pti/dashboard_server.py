@@ -5,6 +5,7 @@ import re
 import shutil
 import sqlite3
 import subprocess
+import tempfile
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -97,12 +98,26 @@ def _find_browser_app() -> str | None:
     return shutil.which("msedge") or shutil.which("chrome")
 
 
-def open_desktop_window(url: str) -> None:
+def open_desktop_window(url: str, profile_root: str | Path | None = None) -> subprocess.Popen | None:
     executable = _find_browser_app()
     if executable:
-        subprocess.Popen([executable, f"--app={url}"], close_fds=True)
-    else:
-        webbrowser.open(url)
+        profile = Path(profile_root) if profile_root else Path(
+            os.environ.get("LOCALAPPDATA", tempfile.gettempdir())
+        ) / "TechChancellor" / "BrowserProfile"
+        profile = profile.resolve()
+        profile.mkdir(parents=True, exist_ok=True)
+        return subprocess.Popen(
+            [
+                executable,
+                f"--app={url}",
+                f"--user-data-dir={profile}",
+                "--no-first-run",
+                "--disable-extensions",
+            ],
+            close_fds=True,
+        )
+    webbrowser.open(url)
+    return None
 
 
 def open_in_obsidian(root: Path) -> bool:
@@ -230,11 +245,15 @@ def serve_dashboard(root: str | Path, host: str = "127.0.0.1", port: int = 0,
     _, url = server.start()
     if open_obsidian:
         open_in_obsidian(Path(root).resolve())
+    app_process = None
     if open_browser:
-        (open_desktop_window if desktop else webbrowser.open)(url)
+        if desktop:
+            app_process = open_desktop_window(url)
+        else:
+            webbrowser.open(url)
     print(json.dumps({"status": "DASHBOARD_RUNNING", "url": url, "binding": host}, ensure_ascii=False))
     try:
-        while True:
+        while app_process is None or app_process.poll() is None:
             if server.thread:
                 server.thread.join(1)
     except KeyboardInterrupt:

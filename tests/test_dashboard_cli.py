@@ -23,8 +23,17 @@ class DashboardCliTests(unittest.TestCase):
         launcher = Path(__file__).parents[1] / "打开技术丞相.cmd"
         text = launcher.read_text(encoding="utf-8")
         self.assertIn("%~dp0", text)
+        self.assertIn("PYTHONUTF8=1", text)
+        self.assertIn("pythonw.exe", text)
         self.assertIn("dashboard", text)
         self.assertNotIn("D:\\personal-tech-intelligence", text)
+
+    def test_install_shortcut_is_an_explicit_action(self):
+        result = {"status": "SHORTCUT_CREATED", "path": "C:/Desktop/技术丞相.lnk"}
+        with patch.object(run, "install_desktop_shortcut", return_value=result) as install:
+            with patch("sys.argv", ["run.py", "install-shortcut"]):
+                self.assertEqual(run.main(), 0)
+        install.assert_called_once_with(Path(run.__file__).parent)
 
 
 if __name__ == "__main__":

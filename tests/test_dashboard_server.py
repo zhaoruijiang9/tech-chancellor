@@ -2,14 +2,29 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 from urllib.error import HTTPError
 from urllib.request import urlopen
 
 from pti.bootstrap import initialize_project
-from pti.dashboard_server import DashboardServer, render_markdown
+from pti.dashboard_server import DashboardServer, open_desktop_window, render_markdown
 
 
 class DashboardServerTests(unittest.TestCase):
+    def test_desktop_window_uses_dedicated_app_profile(self):
+        process = object()
+        with tempfile.TemporaryDirectory() as directory:
+            profile = Path(directory) / "browser-profile"
+            with patch("pti.dashboard_server._find_browser_app", return_value="C:/Edge/msedge.exe"):
+                with patch("pti.dashboard_server.subprocess.Popen", return_value=process) as popen:
+                    result = open_desktop_window("http://127.0.0.1:43210", profile)
+
+        command = popen.call_args.args[0]
+        self.assertIn("--app=http://127.0.0.1:43210", command)
+        self.assertIn(f"--user-data-dir={profile.resolve()}", command)
+        self.assertIn("--no-first-run", command)
+        self.assertIs(result, process)
+
     def test_server_is_loopback_only_and_serves_read_apis(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

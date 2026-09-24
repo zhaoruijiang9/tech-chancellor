@@ -3,14 +3,40 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
   <title>技术丞相 · TechChancellor</title>
   <link rel="stylesheet" href="/assets/app.css">
 </head>
 <body>
-  <header class="topbar"><div class="brand"><span class="brand-mark" aria-hidden="true">丞</span><div><strong>技术丞相</strong><small>个人技术情报控制中心</small></div></div><div class="top-actions"><span id="global-health" class="health-indicator">● 连接中</span><label class="theme-control"><span>主题</span><select id="theme-select" aria-label="界面主题"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label><button class="button quiet" data-action="refresh">刷新</button><span id="last-refresh">正在连接…</span></div></header>
-  <div class="shell"><nav class="nav" aria-label="主导航">
-    <button class="nav-item active" data-view="home">首页</button><button class="nav-item" data-view="capabilities">能力库</button><button class="nav-item" data-view="activity">最近动态</button><button class="nav-item" data-view="system">系统状态</button><button class="nav-item" data-view="documents">文档</button>
-  </nav><main id="app" class="content" aria-live="polite"></main></div>
+  <div class="app-shell">
+    <aside class="app-rail">
+      <div class="rail-brand">
+        <span class="brand-seal" aria-hidden="true">丞</span>
+        <div><strong>技术丞相</strong><small>TechChancellor</small></div>
+      </div>
+      <nav class="nav" aria-label="主导航">
+        <button class="nav-item active" data-view="home"><span class="nav-icon">⌂</span><span>首页</span></button>
+        <button class="nav-item" data-view="capabilities"><span class="nav-icon">◇</span><span>能力库</span></button>
+        <button class="nav-item" data-view="activity"><span class="nav-icon">↻</span><span>最近动态</span></button>
+        <button class="nav-item" data-view="system"><span class="nav-icon">◌</span><span>系统状态</span></button>
+        <button class="nav-item" data-view="documents"><span class="nav-icon">▤</span><span>文档</span></button>
+      </nav>
+      <div class="rail-footer">
+        <button id="global-health" class="rail-health" data-view="system"><span class="pulse-dot"></span><span>正在连接</span></button>
+        <span id="last-refresh">读取本地数据中</span>
+      </div>
+    </aside>
+    <section class="workspace">
+      <header class="command-bar">
+        <div class="command-context"><span>个人技术情报</span><strong id="current-view-label">总览</strong></div>
+        <div class="command-actions">
+          <label class="theme-control"><span>外观</span><select id="theme-select" aria-label="界面主题"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+          <button class="icon-button" data-action="refresh" title="刷新本地数据" aria-label="刷新本地数据">↻</button>
+        </div>
+      </header>
+      <main id="app" class="content" aria-live="polite"></main>
+    </section>
+  </div>
   <script src="/assets/app.js"></script>
 </body>
 </html>
