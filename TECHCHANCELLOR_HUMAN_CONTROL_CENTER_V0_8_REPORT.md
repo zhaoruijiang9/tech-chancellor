@@ -48,9 +48,9 @@ RECENT_ACTIVITY_VISIBILITY = READY
 SYSTEM_STATUS_VISIBILITY = READY
 DOCUMENT_VISIBILITY = READY
 FIRST_REAL_BLOCKER = NONE
-NEXT_MODE = NORMAL_USE_AND_ITERATIVE_UX_IMPROVEMENT
+NEXT_MODE = NORMAL_USE_ON_ACCEPTED_VISUAL_BASELINE
 
-The dashboard is a read-only view over the existing SQLite/PTI state. It does not add a second database, trigger discovery, activate capabilities, change policies, or access `D:\money`. No desktop shortcut was created; the root launcher is the stable Windows entry point.
+The dashboard is a read-only view over the existing SQLite/PTI state. It does not add a second database, trigger discovery, activate capabilities, change policies, or access `D:\money`. The root launcher remains the stable Windows entry point, and the existing desktop shortcut targets it directly.
 
 LOCAL_COMMITS = local only; final implementation commit recorded in Git history
 PUSH = NO
@@ -80,4 +80,14 @@ SHORTCUT_SMOKE = PASS; the actual shortcut launched an independent app window, r
 FULL_TESTS = PASS; 90 tests passed with `PYTHONUTF8=1`, plus Python compile, JavaScript syntax, and Git diff checks.
 LOCAL_HEAD = `560b0c5a3ff06fc6a68b96dd1674f91472ac2a9a` (verified implementation commit before this report-only commit)
 LOCAL_AHEAD_BY = 5 at the verified implementation commit.
+PUSH = NO
+
+## ACCEPTED_VISUAL_BASELINE
+
+CONTROL_CENTER_VISUAL_BASELINE = ACCEPTED_BY_USER
+VISUAL_BASELINE = USER_ACCEPTED
+FINAL_VISUAL_COMMIT = `f4f6d3a27d05bd5d7971d303fe29acbf30d00702`
+TESTS = 92 PASS
+DESKTOP_SHORTCUT = PASS; existing `D:\OneDrive\Desktop\技术丞相.lnk` targets the canonical root launcher, its working directory exists, and the local control center returned HTTP 200 with the expected title.
+WORKTREE = CLEAN_AFTER_REPORT_COMMIT
 PUSH = NO
