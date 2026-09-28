@@ -6,7 +6,8 @@ from typing import Any
 
 from .capability_library import _card, _read_rows
 from .health import health_report
-from .human_toolbox import STATUS_LABELS, _with_usage
+from .human_library import load_human_library_evidence, project_human_library_item
+from .human_toolbox import _with_usage
 
 
 LIFECYCLE_LABELS = {
@@ -33,6 +34,7 @@ ROOT_DOCUMENTS = {
     "LICENSE",
     "MY_CAPABILITIES.md",
 }
+HUMAN_DECISION_LABELS = {"APPROVE_FOR_REVIEW", "WATCH", "NOT_USEFUL", "TOO_RISKY"}
 
 
 def _parse_time(value: str | None) -> str:
@@ -97,16 +99,21 @@ class DashboardReadModel:
             rows = _read_rows(self.db_path)
         except (OSError, sqlite3.Error, json.JSONDecodeError):
             return []
+        latest_feedback, activation_queues = load_human_library_evidence(self.db_path)
         cards = []
         for row in rows:
             card = _with_usage(self.root, _card(row))
             state = card.get("activation_state", "")
-            action = card.get("semantic_action", "")
-            if state in {"QUARANTINE_READY", "BLOCKED_HUMAN"} and not card.get("human_status"):
-                card["human_status"] = LIFECYCLE_LABELS.get(state, state)
-            card["lifecycle_status"] = LIFECYCLE_LABELS.get(state, STATUS_LABELS.get(state, state))
-            if action == "REFERENCE_ONLY":
-                card["lifecycle_status"] = LIFECYCLE_LABELS["REFERENCE_ONLY"]
+            feedback = latest_feedback.get(int(row["github_repository_id"]))
+            human_decision = feedback if feedback and feedback.get("label") in HUMAN_DECISION_LABELS else None
+            card["human_decision"] = human_decision
+            card = project_human_library_item(
+                card,
+                latest_feedback=human_decision,
+                queue_records=activation_queues.get(int(row["github_repository_id"]), []),
+            )
+            card["requires_human_decision"] = card["human_action_required"]
+            card["lifecycle_status"] = card["human_category_label"]
             card["updated_at"] = card.get("evidence_timestamp") or ""
             cards.append(card)
         filters = filters or {}
@@ -116,7 +123,9 @@ class DashboardReadModel:
         if query:
             cards = [card for card in cards if query in json.dumps(card, ensure_ascii=False).lower()]
         if state:
-            cards = [card for card in cards if card.get("lifecycle_status") == state or card.get("activation_state") == state]
+            cards = [card for card in cards if state in {
+                card.get("human_category"), card.get("lifecycle_status"), card.get("activation_state")
+            }]
         if category:
             cards = [card for card in cards if card.get("best_route") == category]
         return sorted(cards, key=lambda item: _safe_date_sort(item.get("updated_at")), reverse=True)
@@ -272,7 +281,7 @@ class DashboardReadModel:
 
     def snapshot(self) -> dict[str, Any]:
         cards = self.capabilities()
-        states = [card.get("activation_state", "") for card in cards]
+        categories = [card.get("human_category", "") for card in cards]
         validating = []
         recent = []
         connection = self._connection()
@@ -290,19 +299,28 @@ class DashboardReadModel:
             "health": health,
             "counts": {
                 "total": len(cards),
-                "directly_usable": sum(state in {"TRIAL_ENABLED", "USED"} for state in states),
-                "used": states.count("USED"),
-                "active_patterns": states.count("ACTIVE_PATTERN"),
-                "validating": len(validating) + sum(state == "QUARANTINE_READY" for state in states),
-                "human_gated": states.count("BLOCKED_HUMAN"),
-                "not_adopted": sum(state in {"TESTED_NOT_ADOPTED", "FAILED_WITH_EXPLAINED_REASON", "FAILED_TERMINAL"} for state in states),
+                "reviewed_projects": len(cards),
+                "usable": sum(category in {"USED", "USABLE"} for category in categories),
+                "directly_usable": sum(category in {"USED", "USABLE"} for category in categories),
+                "used": categories.count("USED"),
+                "adopted_methods": categories.count("ADOPTED_METHOD"),
+                "active_patterns": categories.count("ADOPTED_METHOD"),
+                "processing": categories.count("VALIDATING"),
+                "validating": categories.count("VALIDATING"),
+                "watchlist": categories.count("WATCHLIST"),
+                "human_gated": categories.count("HUMAN_DECISION"),
+                "not_adopted": sum(category in {"NOT_ADOPTED", "VALIDATION_FAILED", "ARCHIVED"} for category in categories),
             },
             "latest_scan": health.get("latest_scan_run"),
             "latest_chancellor": health.get("latest_stage_b_run"),
             "recent_discoveries": recent,
             "validating": validating,
-            "directly_usable_cards": [card for card in cards if card.get("activation_state") in {"TRIAL_ENABLED", "USED"}],
-            "knowledge_cards": [card for card in cards if card.get("activation_state") == "ACTIVE_PATTERN" or card.get("semantic_action") == "REFERENCE_ONLY"],
-            "not_adopted_cards": [card for card in cards if card.get("activation_state") in {"TESTED_NOT_ADOPTED", "FAILED_WITH_EXPLAINED_REASON", "FAILED_TERMINAL"}],
-            "human_gated_cards": [card for card in cards if card.get("activation_state") == "BLOCKED_HUMAN"],
+            "my_capabilities_cards": [card for card in cards if card.get("human_category") in {"USED", "USABLE"}],
+            "method_cards": [card for card in cards if card.get("human_category") == "ADOPTED_METHOD"],
+            "pending_cards": [card for card in cards if card.get("human_category") in {"VALIDATING", "HUMAN_DECISION"}],
+            "watch_archive_cards": [card for card in cards if card.get("human_category") in {"WATCHLIST", "NOT_ADOPTED", "VALIDATION_FAILED", "ARCHIVED"}],
+            "directly_usable_cards": [card for card in cards if card.get("human_category") in {"USED", "USABLE"}],
+            "knowledge_cards": [card for card in cards if card.get("human_category") == "ADOPTED_METHOD"],
+            "not_adopted_cards": [card for card in cards if card.get("human_category") in {"NOT_ADOPTED", "VALIDATION_FAILED", "ARCHIVED"}],
+            "human_gated_cards": [card for card in cards if card.get("human_category") == "HUMAN_DECISION"],
         }

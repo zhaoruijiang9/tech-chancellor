@@ -4,10 +4,12 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 from urllib.error import HTTPError
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 
 from pti.bootstrap import initialize_project
 from pti.dashboard_server import DashboardServer, open_desktop_window, render_markdown
+from pti.models import RepositoryRecord
+from pti.storage import Database
 
 
 class DashboardServerTests(unittest.TestCase):
@@ -56,6 +58,40 @@ class DashboardServerTests(unittest.TestCase):
         self.assertNotIn("<script>", rendered)
         self.assertNotIn("javascript:", rendered)
         self.assertIn("&lt;script&gt;", rendered)
+
+    def test_feedback_endpoint_records_only_allowlisted_human_choices(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "config").mkdir()
+            (root / "config" / "discovery.json").write_text("{}", encoding="utf-8")
+            (root / "config" / "local_capability_profile.json").write_text("{}", encoding="utf-8")
+            initialize_project(root, root / "config" / "discovery.json", root / "config" / "local_capability_profile.json")
+            db = Database(root / "state" / "intelligence.db")
+            db.upsert_repository(RepositoryRecord(7, "owner/repo", "https://github.com/owner/repo"))
+            server = DashboardServer(root, port=0)
+            httpd, url = server.start()
+            try:
+                payload = json.dumps({"repository": "owner/repo", "label": "WATCH"}).encode("utf-8")
+                request = Request(url + "/api/feedback", data=payload, method="POST", headers={
+                    "Content-Type": "application/json",
+                    "Origin": url,
+                })
+                with urlopen(request) as response:
+                    result = json.loads(response.read().decode("utf-8"))
+                self.assertEqual(result["status"], "FEEDBACK_RECORDED")
+                self.assertEqual(db.get_feedback(7)[0]["label"], "WATCH")
+
+                bad = Request(url + "/api/feedback", data=json.dumps({
+                    "repository": "owner/repo", "label": "INSTALL_NOW"
+                }).encode("utf-8"), method="POST", headers={
+                    "Content-Type": "application/json",
+                    "Origin": url,
+                })
+                with self.assertRaises(HTTPError) as error:
+                    urlopen(bad)
+                self.assertEqual(error.exception.code, 400)
+            finally:
+                server.stop()
 
 
 if __name__ == "__main__":

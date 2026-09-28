@@ -12,7 +12,11 @@ from pathlib import Path
 from threading import Thread
 from urllib.parse import parse_qs, unquote, urlparse
 
+from .cli import record_feedback
 from .dashboard_read_model import DashboardReadModel
+
+
+ALLOWED_DASHBOARD_FEEDBACK = {"APPROVE_FOR_REVIEW", "WATCH", "NOT_USEFUL", "TOO_RISKY"}
 
 
 def _json_bytes(value: object) -> bytes:
@@ -175,6 +179,30 @@ class DashboardServer:
             def _api(self, payload: object, status: int = 200) -> None:
                 self._send(status, _json_bytes(payload), "application/json; charset=utf-8")
 
+            def do_POST(self) -> None:
+                parsed = urlparse(self.path)
+                if parsed.path != "/api/feedback":
+                    self._send(404, b"Not Found", "text/plain; charset=utf-8")
+                    return
+                expected_origin = f"http://{self.server.server_address[0]}:{self.server.server_address[1]}"
+                content_type = self.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
+                try:
+                    length = int(self.headers.get("Content-Length", "0"))
+                    if self.headers.get("Origin") != expected_origin:
+                        raise ValueError("feedback origin is not allowed")
+                    if content_type != "application/json" or length <= 0 or length > 4096:
+                        raise ValueError("feedback request must be a small JSON object")
+                    payload = json.loads(self.rfile.read(length).decode("utf-8"))
+                    repository = str(payload.get("repository", "")).strip()
+                    label = str(payload.get("label", "")).strip()
+                    note = str(payload.get("note", "")).strip()
+                    if not repository or label not in ALLOWED_DASHBOARD_FEEDBACK:
+                        raise ValueError("feedback choice is not allowed")
+                    record_feedback(self.server.root, repository, label, note)
+                    self._api({"status": "FEEDBACK_RECORDED", "repository": repository, "label": label})
+                except (ValueError, UnicodeDecodeError, json.JSONDecodeError, sqlite3.Error) as error:
+                    self._api({"error": str(error)}, 400)
+
             def do_GET(self) -> None:
                 parsed = urlparse(self.path)
                 path = unquote(parsed.path)
@@ -229,6 +257,7 @@ class DashboardServer:
         for candidate_port in range(self.port or 0, (self.port or 0) + 20):
             try:
                 self.httpd = _DashboardHTTPServer((self.host, candidate_port), Handler)
+                self.httpd.root = self.root
                 break
             except OSError as error:
                 last_error = error

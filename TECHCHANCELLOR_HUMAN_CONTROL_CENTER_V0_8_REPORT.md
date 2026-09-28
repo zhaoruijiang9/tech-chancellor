@@ -50,7 +50,7 @@ DOCUMENT_VISIBILITY = READY
 FIRST_REAL_BLOCKER = NONE
 NEXT_MODE = NORMAL_USE_ON_ACCEPTED_VISUAL_BASELINE
 
-The dashboard is a read-only view over the existing SQLite/PTI state. It does not add a second database, trigger discovery, activate capabilities, change policies, or access `D:\money`. The root launcher remains the stable Windows entry point, and the existing desktop shortcut targets it directly.
+The dashboard is a read-mostly view over the existing SQLite/PTI state. It does not add a second database, trigger discovery, activate capabilities, change policies, or access `D:\money`. Its only bounded write is an explicit human feedback record for capabilities already marked `BLOCKED_HUMAN`; that record never installs or runs a project. The root launcher remains the stable Windows entry point, and the existing desktop shortcut targets it directly.
 
 LOCAL_COMMITS = local only; final implementation commit recorded in Git history
 PUSH = NO
@@ -90,4 +90,26 @@ FINAL_VISUAL_COMMIT = `f4f6d3a27d05bd5d7971d303fe29acbf30d00702`
 TESTS = 92 PASS
 DESKTOP_SHORTCUT = PASS; existing `D:\OneDrive\Desktop\技术丞相.lnk` targets the canonical root launcher, its working directory exists, and the local control center returned HTTP 200 with the expected title.
 WORKTREE = CLEAN_AFTER_REPORT_COMMIT
+PUSH = NO
+
+## V0.8.6_INTERACTION_REPAIR
+
+INTERNAL_NAVIGATION = PASS; primary views, capability details, activity-linked projects, and local documents use native hash routes and were clicked through in Microsoft Edge.
+CAPABILITY_IMAGE_RATIO = PASS; capability artwork uses proportional `cover` rendering instead of non-uniform stretching.
+HUMAN_DECISION_UI = PASS; unresolved `BLOCKED_HUMAN` capabilities expose only continue isolated review, keep watching, and do not adopt.
+AUTOMATIC_ACTIVATION = NO; dashboard feedback does not install, execute, or connect a capability to `D:\money`.
+BACKGROUND_QUEUE_COPY = PASS; active pending packets are described as a Chancellor retry queue rather than a required user action.
+TESTS = 98 PASS
+
+## V0.9_CAPABILITY_LIBRARY_CURATION
+
+REVIEWED_PROJECTS = 14; this is an audit count, not an installed-capability count.
+HUMAN_LIBRARY = 1 USED, 0 USABLE, 2 ADOPTED_METHOD, 1 VALIDATING, 1 HUMAN_DECISION, 6 WATCHLIST, 2 NOT_ADOPTED, 1 VALIDATION_FAILED, 0 ARCHIVED.
+DEFAULT_LIBRARY_VIEW = MY_CAPABILITIES; only USED and USABLE records appear there.
+METHOD_LIBRARY = PASS; Spec Kit and BMAD are presented as adopted methods, not installed tools.
+OWNER_DECISION = TauricResearch/TradingAgents only.
+PRIOR_APPROVAL = nieledran/backtesting-engine remains system processing and does not ask the owner again.
+ARCHON = VALIDATION_FAILED; not installed, not runnable, and retained only as a safely stopped reference.
+REAL_UI_VALIDATION = PASS; all four library sections and representative detail states were clicked through in Microsoft Edge.
+TESTS = 109 PASS
 PUSH = NO

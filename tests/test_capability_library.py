@@ -30,7 +30,7 @@ class CapabilityLibraryTests(unittest.TestCase):
             result = build_library(root, db)
             self.assertEqual(result["count"], 1)
             self.assertTrue((root / "library/generated/index.md").exists())
-            card = json.loads((root / "library/generated/repositories/owner--repo.json").read_text())
+            card = json.loads((root / "library/generated/repositories/owner--repo.json").read_text(encoding="utf-8"))
             self.assertEqual(card["evidence_maturity"], "REVIEWED")
             self.assertEqual(card["consumption_form"], "KNOWLEDGE")
 
@@ -49,7 +49,7 @@ class CapabilityLibraryTests(unittest.TestCase):
             c.execute("insert into activation_records values (1,'TIER_2_LOW_PRIVILEGE_LOCAL_TOOL','TRIAL_ENABLED','TESTED','abc123','PASS','PASS','NOT_ENABLED','READY')")
             c.commit(); c.close()
             build_library(root, db)
-            card = json.loads((root / "library/generated/repositories/tt-a1i--archify.json").read_text())
+            card = json.loads((root / "library/generated/repositories/tt-a1i--archify.json").read_text(encoding="utf-8"))
             self.assertEqual(card["activation_state"], "TRIAL_ENABLED")
             self.assertTrue(card["safe_invocation_available"])
             self.assertEqual(card["availability"], "GLOBAL_CODEX_CONTROLLED")

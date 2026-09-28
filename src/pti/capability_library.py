@@ -15,7 +15,20 @@ def _read_rows(db_path: str | Path) -> list[dict[str, Any]]:
         has_activation = connection.execute("""select 1 from sqlite_master
             where type='table' and name='activation_records'""").fetchone() is not None
         activation_join = "left join activation_records a on a.github_repository_id=r.github_repository_id" if has_activation else ""
-        activation_columns = ",a.activation_tier,a.activation_state,a.pinned_version,a.static_analysis_status,a.isolated_test_status,a.trial_status,a.rollback_status,a.evidence_maturity" if has_activation else ""
+        activation_columns = ""
+        if has_activation:
+            existing_columns = {
+                row[1] for row in connection.execute("PRAGMA table_info(activation_records)")
+            }
+            wanted_columns = (
+                "activation_tier", "activation_state", "pinned_version", "static_analysis_status",
+                "isolated_test_status", "trial_status", "rollback_status", "evidence_maturity", "notes",
+                "real_use_project", "real_use_task_type", "real_use_at", "real_use_outcome", "real_use_evidence",
+            )
+            activation_columns = "," + ",".join(
+                f"a.{name} AS {name}" if name in existing_columns else f"NULL AS {name}"
+                for name in wanted_columns
+            )
         rows = connection.execute(f"""select r.github_repository_id,r.canonical_owner_repo,r.url,r.description,r.stars,r.topics,
             d.decision_json,d.packet_name,d.imported_at{activation_columns} from repositories r join chancellor_decisions d
             on d.github_repository_id=r.github_repository_id {activation_join} order by r.canonical_owner_repo""").fetchall()
@@ -50,6 +63,12 @@ def _card(row: dict[str, Any]) -> dict[str, Any]:
             "isolated_test_status": row.get("isolated_test_status") or "NOT_RUN",
             "trial_status": row.get("trial_status") or "NOT_ENABLED",
             "rollback_status": row.get("rollback_status") or "UNKNOWN",
+            "activation_notes": row.get("notes") or "",
+            "real_use_project": row.get("real_use_project"),
+            "real_use_task_type": row.get("real_use_task_type"),
+            "real_use_at": row.get("real_use_at"),
+            "real_use_outcome": row.get("real_use_outcome"),
+            "real_use_evidence": row.get("real_use_evidence"),
             "best_route": decision.get("BEST_ROUTE", "GENERAL"),
             "human_summary": row.get("human_usage", {}).get("human_summary", decision.get("WHAT_IS_IT", "UNKNOWN")),
             "when_to_use": row.get("human_usage", {}).get("when_to_use", []),

@@ -37,8 +37,11 @@ class HumanToolboxTests(unittest.TestCase):
             self.assertEqual(result["count"], 1)
             self.assertIn("# 我现在能用什么？", text)
             self.assertIn("用于测试的工具", text)
+            self.assertIn("## 观察与归档", text)
+            self.assertNotIn("## 已安装 / 可以直接用\n\n### owner/tool", text)
             payload = json.loads((root / "library" / "generated" / "human_toolbox.json").read_text(encoding="utf-8"))
             self.assertIn("human_summary", payload["cards"][0])
+            self.assertEqual(payload["cards"][0]["human_category"], "WATCHLIST")
 
 
 if __name__ == "__main__":

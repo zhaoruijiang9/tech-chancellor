@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Any
 
 from .capability_library import _card, _read_rows
+from .human_library import load_human_library_evidence, project_human_library_item
 
 
 STATUS_LABELS = {
@@ -38,11 +39,18 @@ def _with_usage(root: Path, card: dict[str, Any]) -> dict[str, Any]:
 
 def build_human_toolbox(root: str | Path, db_path: str | Path | None = None) -> dict[str, Any]:
     root = Path(root).resolve()
-    cards = [_with_usage(root, _card(row)) for row in _read_rows(db_path or root / "state" / "intelligence.db")]
-    direct = [card for card in cards if card["activation_state"] in {"TRIAL_ENABLED", "USED"}]
-    patterns = [card for card in cards if card["activation_state"] == "ACTIVE_PATTERN"]
-    reference = [card for card in cards if card["activation_state"] not in {"TRIAL_ENABLED", "USED", "ACTIVE_PATTERN", "BLOCKED_HUMAN"}]
-    human_gate = [card for card in cards if card["activation_state"] == "BLOCKED_HUMAN"]
+    db_path = Path(db_path or root / "state" / "intelligence.db")
+    feedback, queues = load_human_library_evidence(db_path)
+    cards = []
+    for row in _read_rows(db_path):
+        repository_id = int(row["github_repository_id"])
+        cards.append(project_human_library_item(
+            _with_usage(root, _card(row)), feedback.get(repository_id), queues.get(repository_id, [])
+        ))
+    direct = [card for card in cards if card["human_category"] in {"USED", "USABLE"}]
+    patterns = [card for card in cards if card["human_category"] == "ADOPTED_METHOD"]
+    pending = [card for card in cards if card["human_category"] in {"VALIDATING", "HUMAN_DECISION"}]
+    reference = [card for card in cards if card["human_category"] in {"WATCHLIST", "NOT_ADOPTED", "VALIDATION_FAILED", "ARCHIVED"}]
 
     lines = ["# 我现在能用什么？", "", "这份清单由 PTI 当前能力库自动生成；项目状态以数据库为准。", ""]
     def section(title: str, items: list[dict[str, Any]]) -> None:
@@ -52,7 +60,8 @@ def build_human_toolbox(root: str | Path, db_path: str | Path | None = None) -> 
             return
         for card in items:
             lines.extend([f"### {card['repository']}：{card['human_summary']}",
-                          f"- 状态：{card['human_status']}",
+                          f"- 状态：{card['human_category_label']}",
+                          f"- 保留原因：{card['classification_reason']}",
                           f"- 适合：{'；'.join(card['when_to_use'])}",
                           f"- 你可以说：{' / '.join(card['how_to_ask_codex'])}",
                           f"- 会得到：{'；'.join(card['expected_outputs'])}",
@@ -60,14 +69,17 @@ def build_human_toolbox(root: str | Path, db_path: str | Path | None = None) -> 
                           f"- 自动程度：{card['automatic_use_policy']}",
                           f"- 限制：{'；'.join(card['main_limitations'])}", ""])
 
-    section("已安装 / 可以直接用", direct)
-    section("已启用的方法 / 工作模式", patterns)
-    section("已研究但当前不值得安装", reference)
-    section("需要我批准才能进一步启用", human_gate)
+    section("我的能力", direct)
+    section("已采用的方法", patterns)
+    section("正在处理 / 需要你决定", pending)
+    section("观察与归档", reference)
     lines.extend(["## 结果在哪里？", "", "需要生成文件的能力会在 PTI 的 `reports/` 或能力专属输出目录留下文件；Codex 会在交付时给出可直接打开的完整路径。", ""])
     output = root / "MY_CAPABILITIES.md"
     output.write_text("\n".join(lines), encoding="utf-8")
     generated = root / "library" / "generated"
     generated.mkdir(parents=True, exist_ok=True)
     (generated / "human_toolbox.json").write_text(json.dumps({"count": len(cards), "cards": cards}, ensure_ascii=False, indent=2), encoding="utf-8")
-    return {"status": "HUMAN_TOOLBOX_BUILT", "count": len(cards), "entrypoint": str(output), "directly_usable": len(direct), "active_patterns": len(patterns), "human_gate": len(human_gate)}
+    return {"status": "HUMAN_TOOLBOX_BUILT", "count": len(cards), "entrypoint": str(output),
+            "directly_usable": len(direct), "adopted_methods": len(patterns),
+            "processing": sum(card["human_category"] == "VALIDATING" for card in pending),
+            "human_gate": sum(card["human_category"] == "HUMAN_DECISION" for card in pending)}

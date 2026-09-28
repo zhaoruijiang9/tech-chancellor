@@ -38,7 +38,7 @@ python run.py my-capabilities
 
 ## Human Control Center
 
-After initialization, double-click `打开技术丞相.cmd` to open the local read-only Control Center. It starts a loopback-only desktop-style browser window by default. For a normal browser window or automated checks, use `python run.py dashboard --browser` or `python run.py dashboard --no-browser`. The dashboard shows recent discoveries, validation, directly usable capabilities, knowledge patterns, system status, and project documents without exposing the SQLite database directly.
+After initialization, double-click `打开技术丞相.cmd` to open the local Control Center. It starts a loopback-only desktop-style browser window by default. For a normal browser window or automated checks, use `python run.py dashboard --browser` or `python run.py dashboard --no-browser`. The dashboard is read-mostly: it shows discoveries, validation, capabilities, system status, and local documents. For capabilities explicitly marked as requiring a human decision, it may record one of three bounded choices: continue isolated review, keep watching, or do not adopt. Recording a choice never installs or runs the project and never connects it to `D:\money`.
 
 ## 安全边界
 
