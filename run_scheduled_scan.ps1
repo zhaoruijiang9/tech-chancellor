@@ -23,6 +23,12 @@ function Invoke-PtiProcess([string]$file, [string[]]$arguments, [string]$stdout,
 }
 
 $scanExit = Invoke-PtiProcess $python @('run.py', 'scan', '--dry-run') (Join-Path $state 'scheduled-scan.log') (Join-Path $state 'scheduled-scan.error.log')
+try {
+    $upstreamScript = Join-Path $root 'run_scheduled_upstream.ps1'
+    Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-ExecutionPolicy', 'Bypass', '-File', $upstreamScript) -WindowStyle Hidden | Out-Null
+} catch {
+    $_.Exception.Message | Out-File -LiteralPath (Join-Path $state 'upstream-check.error.log') -Append -Encoding utf8
+}
 if ($scanExit -ne 0) { exit $scanExit }
 $count = & $python (Join-Path $root 'run.py') 'pending-count' 2>$null
 if ([int]$count -eq 0) { exit 0 }

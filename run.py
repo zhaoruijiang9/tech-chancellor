@@ -15,11 +15,15 @@ from pti.human_toolbox import build_human_toolbox
 from pti.bootstrap import initialize_project
 from pti.dashboard_server import serve_dashboard
 from pti.windows_shortcut import install_desktop_shortcut
+from pti.capability_intelligence import CapabilityStore
+from pti.storage import Database
+from pti.upstream_intelligence import GitHubFingerprintProvider, check_upstream
+from pti.upstream_review import CodexDeltaReviewer, review_pending_deltas
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Manual Phase 1 technology intelligence run")
-    parser.add_argument("action", nargs="?", choices=["init", "scan", "stage-b", "feedback", "pending-count", "health", "build-library", "my-capabilities", "search-capabilities", "dashboard", "install-shortcut"], default="scan")
+    parser.add_argument("action", nargs="?", choices=["init", "scan", "stage-b", "feedback", "pending-count", "health", "build-library", "my-capabilities", "search-capabilities", "dashboard", "install-shortcut", "migrate-capabilities", "check-upstream", "review-upstream", "review-delta"], default="scan")
     parser.add_argument("repo", nargs="?")
     parser.add_argument("label", nargs="?")
     parser.add_argument("note", nargs="?", default="")
@@ -39,8 +43,34 @@ def main() -> int:
     parser.add_argument("--no-browser", action="store_true")
     parser.add_argument("--browser", action="store_true", help="use a normal browser window instead of app mode")
     parser.add_argument("--open-obsidian", action="store_true")
+    parser.add_argument("--force-upstream", action="store_true")
+    parser.add_argument("--review-id", type=int)
+    parser.add_argument("--review-outcome", default="")
+    parser.add_argument("--review-evidence", default="")
     args = parser.parse_args()
     root = Path(__file__).parent
+    if args.action in {"migrate-capabilities", "check-upstream", "review-upstream", "review-delta"}:
+        db_path = root / "state" / "intelligence.db"
+        Database(db_path).initialize()
+        store = CapabilityStore(db_path)
+        if args.action == "review-delta":
+            if args.review_id is None:
+                parser.error("review-delta requires --review-id")
+            from pti.models import utc_now
+            store.complete_delta_review(args.review_id, args.review_outcome, args.review_evidence, utc_now())
+            print(json.dumps({"status": "REVIEW_RECORDED", "review_id": args.review_id}, ensure_ascii=False))
+            return 0
+        migration = store.migrate_reviewed_sources()
+        if args.action == "migrate-capabilities":
+            print(json.dumps({"status": "MIGRATION_COMPLETE", **migration}, ensure_ascii=False, indent=2))
+            return 0
+        if args.action == "review-upstream":
+            result = review_pending_deltas(store, CodexDeltaReviewer(root), limit=args.limit)
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            return 0 if result["failed"] == 0 and result["skipped_exhausted"] == 0 else 1
+        result = check_upstream(store, GitHubFingerprintProvider(), force=args.force_upstream)
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0 if result["failures"] == 0 else 1
     if args.action == "init":
         result = initialize_project(root, root / args.config, root / args.capability_profile)
         print(json.dumps(result, ensure_ascii=False, indent=2))
@@ -60,7 +90,7 @@ def main() -> int:
     if args.action == "health":
         result = health_report(root)
         print(json.dumps(result, ensure_ascii=False, indent=2))
-        return 0 if result["status"] in {"HEALTHY", "DEGRADED_HISTORY_ONLY"} else 1
+        return 0 if result["status"] in {"HEALTHY", "DEGRADED_HISTORY_ONLY", "DEGRADED"} else 1
     if args.action == "build-library":
         result = build_library(root)
         print(json.dumps(result, ensure_ascii=False, indent=2))

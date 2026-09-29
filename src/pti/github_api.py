@@ -147,6 +147,11 @@ class GitHubClient:
         data, headers, failure = self._request(f"/repos/{owner}/{repo}/commits", {"per_page": 1})
         return ApiResult(raw=data, rate_headers=headers, failure=failure)
 
+    def compare_commits(self, owner: str, repo: str, base: str, head: str) -> ApiResult:
+        path = f"/repos/{owner}/{repo}/compare/{urllib.parse.quote(base, safe='')}...{urllib.parse.quote(head, safe='')}"
+        data, headers, failure = self._request(path, {"per_page": 30})
+        return ApiResult(raw=data, rate_headers=headers, failure=failure)
+
     def get_readme(self, owner: str, repo: str) -> ApiResult:
         data, headers, failure = self._request(f"/repos/{owner}/{repo}/readme")
         if failure:

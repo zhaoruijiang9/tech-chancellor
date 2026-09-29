@@ -5,9 +5,37 @@ import unittest
 from pathlib import Path
 
 from pti.human_toolbox import build_human_toolbox
+from pti.capability_intelligence import CapabilityStore
 
 
 class HumanToolboxTests(unittest.TestCase):
+    def test_normalized_capability_and_evidence_gated_method_are_reported(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            db_path = root / "state.db"
+            db = sqlite3.connect(db_path)
+            db.executescript("""
+                create table repositories (github_repository_id integer primary key, canonical_owner_repo text, url text, description text, stars integer, topics text, previous_decision text, previous_routes text);
+                create table chancellor_decisions (github_repository_id integer primary key, decision_json text, packet_name text, imported_at text);
+            """)
+            db.close()
+            store = CapabilityStore(db_path)
+            store.upsert_source("src:one", "GITHUB_REPOSITORY", "owner/tool", "https://github.com/owner/tool")
+            store.upsert_implementation("impl:one", "src:one", "Tool", "CLI")
+            store.upsert_capability("cap:one", "架构可视化", "可视化系统结构")
+            store.link_implementation_capability("impl:one", "cap:one", "NEW_CAPABILITY", "test")
+            store.set_personal_state("CAPABILITY", "cap:one", "USED", "test")
+            store.upsert_method("method:one", "src:one", "需求澄清", "用问题定义范围")
+            store.record_method_evidence("method:one", "WORKFLOW_MECHANISM", "test:policy", "policy", True)
+            store.record_method_evidence("method:one", "VERIFIED_USE", "test:use", "task", True)
+            result = build_human_toolbox(root, db_path)
+            text = (root / "MY_CAPABILITIES.md").read_text(encoding="utf-8")
+            self.assertIn("### 架构可视化", text)
+            self.assertIn("### 需求澄清", text)
+            self.assertNotIn("### owner/tool：", text)
+            self.assertEqual(result["directly_usable"], 1)
+            self.assertEqual(result["adopted_methods"], 1)
+
     def test_toolbox_is_derived_from_current_cards_and_has_human_fields(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

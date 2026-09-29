@@ -31,12 +31,21 @@ class HumanLibraryProjectionTests(unittest.TestCase):
         self.assertEqual(result["item_kind"], "CAPABILITY")
         self.assertFalse(result["human_action_required"])
 
-    def test_distilled_and_enabled_method_is_not_a_tool(self):
+    def test_distilled_reference_without_workflow_evidence_is_not_adopted(self):
         for repository in ("bmad-code-org/BMAD-METHOD", "github/spec-kit"):
             with self.subTest(repository=repository):
                 result = project_human_library_item(card(repository, "ACTIVE_PATTERN"))
-                self.assertEqual(result["human_category"], "ADOPTED_METHOD")
-                self.assertEqual(result["item_kind"], "PATTERN_METHOD")
+                self.assertEqual(result["human_category"], "WATCHLIST")
+                self.assertEqual(result["item_kind"], "METHOD_SOURCE")
+
+    def test_method_is_adopted_only_when_capability_model_proves_it(self):
+        result = project_human_library_item(card(
+            "bmad-code-org/BMAD-METHOD",
+            "ACTIVE_PATTERN",
+            method_adoption_state="ADOPTED",
+        ))
+        self.assertEqual(result["human_category"], "ADOPTED_METHOD")
+        self.assertEqual(result["item_kind"], "METHOD_SOURCE")
 
     def test_reference_only_item_is_not_mislabeled_as_adopted_method(self):
         result = project_human_library_item(card("cased/kit", "ACTIVE_PATTERN"))
@@ -56,9 +65,18 @@ class HumanLibraryProjectionTests(unittest.TestCase):
             latest_feedback={"label": "APPROVE_FOR_REVIEW", "created_at": "2026-09-28 14:11:56"},
             queue_records=[{"status": "BLOCKED_HUMAN", "attempt_count": 1}],
         )
-        self.assertEqual(result["human_category"], "VALIDATING")
+        self.assertEqual(result["human_category"], "WAITING_VALIDATION")
         self.assertFalse(result["human_action_required"])
-        self.assertEqual(result["processing_state"], "AUTHORIZED_FOR_REVIEW")
+        self.assertEqual(result["processing_state"], "APPROVED_WAITING_VALIDATION")
+
+    def test_processing_queue_is_the_only_active_validation_state(self):
+        result = project_human_library_item(
+            card("nieledran/backtesting-engine", "BLOCKED_HUMAN", action="CANDIDATE_FOR_QUARANTINE"),
+            latest_feedback={"label": "APPROVE_FOR_REVIEW"},
+            queue_records=[{"status": "PROCESSING", "attempt_count": 1}],
+        )
+        self.assertEqual(result["human_category"], "VALIDATING")
+        self.assertEqual(result["processing_state"], "IN_PROGRESS")
 
     def test_unresolved_sensitive_candidate_still_needs_owner_decision(self):
         result = project_human_library_item(

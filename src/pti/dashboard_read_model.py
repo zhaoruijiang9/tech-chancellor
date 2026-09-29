@@ -13,6 +13,7 @@ from .human_toolbox import _with_usage
 LIFECYCLE_LABELS = {
     "DISCOVERED": "最近发现",
     "REVIEW": "待判断",
+    "WAITING_VALIDATION": "已批准，等待验证",
     "VALIDATING": "正在验证",
     "QUARANTINE_READY": "正在验证",
     "TRIAL_ENABLED": "已安装，可使用",
@@ -92,6 +93,105 @@ class DashboardReadModel:
             "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (name,)
         ).fetchone() is not None
 
+    def _source_intelligence(self, connection: sqlite3.Connection, repository_id: int) -> dict[str, Any]:
+        if not self._table_exists(connection, "capability_sources"):
+            return {}
+        source = connection.execute(
+            "SELECT * FROM capability_sources WHERE github_repository_id=?", (repository_id,)
+        ).fetchone()
+        if source is None:
+            return {}
+        source_id = source["source_id"]
+        mappings = [dict(row) for row in connection.execute("""
+            SELECT c.capability_id,c.name,m.delta_kind,m.evidence_ref,
+                   i.implementation_id,i.name implementation_name
+            FROM capability_implementations i
+            JOIN implementation_capabilities m USING(implementation_id)
+            JOIN capabilities c USING(capability_id)
+            WHERE i.source_id=? ORDER BY c.capability_id
+        """, (source_id,))]
+        freshness = connection.execute(
+            "SELECT * FROM source_freshness WHERE source_id=?", (source_id,)
+        ).fetchone()
+        review = connection.execute(
+            """SELECT review_outcome,review_evidence,reviewed_at FROM delta_review_queue
+            WHERE source_id=? AND status='REVIEWED' ORDER BY id DESC LIMIT 1""", (source_id,)
+        ).fetchone()
+        return {
+            "source_id": source_id,
+            "source_type": source["source_type"],
+            "capability_mappings": mappings,
+            "source_freshness": dict(freshness) if freshness else None,
+            "latest_delta_review": dict(review) if review else None,
+        }
+
+    def _entity_snapshot(self) -> dict[str, list[dict[str, Any]]]:
+        connection = self._connection()
+        if connection is None:
+            return {"capability_entities": [], "method_entities": [], "stale_reviews": []}
+        try:
+            if not self._table_exists(connection, "capabilities"):
+                return {"capability_entities": [], "method_entities": [], "stale_reviews": []}
+            capabilities = []
+            has_activation_records = self._table_exists(connection, "activation_records")
+            pinned_column = "a.pinned_version" if has_activation_records else "NULL AS pinned_version"
+            activation_join = (
+                "LEFT JOIN activation_records a ON a.github_repository_id=s.github_repository_id"
+                if has_activation_records else ""
+            )
+            for row in connection.execute("SELECT * FROM capabilities ORDER BY name"):
+                item = dict(row)
+                item["personal_states"] = [record[0] for record in connection.execute(
+                    """SELECT state FROM personal_states WHERE subject_type='CAPABILITY'
+                    AND subject_id=? ORDER BY state""", (row["capability_id"],)
+                )]
+                item["implementations"] = [dict(record) for record in connection.execute(f"""
+                    SELECT i.implementation_id,i.name,i.implementation_type,i.lifecycle_state,
+                           s.canonical_name source_name,s.url source_url,
+                           {pinned_column},f.current_release_tag,f.reviewed_release_tag,
+                           f.review_freshness,f.last_upstream_check
+                    FROM implementation_capabilities m
+                    JOIN capability_implementations i USING(implementation_id)
+                    LEFT JOIN capability_sources s USING(source_id)
+                    {activation_join}
+                    LEFT JOIN source_freshness f USING(source_id)
+                    WHERE m.capability_id=? ORDER BY i.implementation_id
+                """, (row["capability_id"],))]
+                if any(state in {"OWNED", "AVAILABLE", "USED"} for state in item["personal_states"]):
+                    capabilities.append(item)
+            methods = []
+            for row in connection.execute("""
+                SELECT m.*,s.canonical_name source_name,s.url source_url
+                FROM methods m LEFT JOIN capability_sources s USING(source_id)
+                ORDER BY m.name
+            """):
+                item = dict(row)
+                evidence_types = {record[0] for record in connection.execute("""
+                    SELECT evidence_type FROM method_evidence
+                    WHERE method_id=? AND qualifies=1
+                """, (row["method_id"],))}
+                if {"WORKFLOW_MECHANISM", "VERIFIED_USE"}.issubset(evidence_types):
+                    methods.append(item)
+            stale = []
+            if self._table_exists(connection, "delta_review_queue"):
+                stale = [dict(row) for row in connection.execute("""
+                    SELECT q.id,q.source_id,q.trigger_reason,q.change_summary,q.suggested_outcome,
+                           q.review_attempts,q.review_error,q.created_at,
+                           q.old_head_sha,q.new_head_sha,q.old_release_tag,q.new_release_tag,
+                           s.canonical_name source_name,s.github_repository_id,
+                           f.review_freshness
+                    FROM delta_review_queue q JOIN capability_sources s USING(source_id)
+                    LEFT JOIN source_freshness f USING(source_id)
+                    WHERE q.status='PENDING' ORDER BY q.created_at DESC,q.id DESC
+                """)]
+            return {
+                "capability_entities": capabilities,
+                "method_entities": methods,
+                "stale_reviews": stale,
+            }
+        finally:
+            connection.close()
+
     def capabilities(self, filters: dict[str, str] | None = None) -> list[dict[str, Any]]:
         if not self.db_path.is_file():
             return []
@@ -100,6 +200,33 @@ class DashboardReadModel:
         except (OSError, sqlite3.Error, json.JSONDecodeError):
             return []
         latest_feedback, activation_queues = load_human_library_evidence(self.db_path)
+        method_adoption: dict[int, str] = {}
+        source_intelligence: dict[int, dict[str, Any]] = {}
+        connection = self._connection()
+        if connection is not None:
+            try:
+                if self._table_exists(connection, "methods") and self._table_exists(connection, "method_evidence"):
+                    method_rows = connection.execute("""
+                        SELECT s.github_repository_id,
+                               MAX(CASE WHEN mechanism.evidence_type IS NOT NULL
+                                         AND used.evidence_type IS NOT NULL THEN 1 ELSE 0 END) adopted
+                        FROM methods m
+                        JOIN capability_sources s ON s.source_id=m.source_id
+                        LEFT JOIN method_evidence mechanism ON mechanism.method_id=m.method_id
+                          AND mechanism.evidence_type='WORKFLOW_MECHANISM' AND mechanism.qualifies=1
+                        LEFT JOIN method_evidence used ON used.method_id=m.method_id
+                          AND used.evidence_type='VERIFIED_USE' AND used.qualifies=1
+                        GROUP BY s.github_repository_id
+                    """).fetchall()
+                    method_adoption = {
+                        int(row["github_repository_id"]): "ADOPTED" if row["adopted"] else "KNOWLEDGE_REFERENCE"
+                        for row in method_rows if row["github_repository_id"] is not None
+                    }
+                for row in rows:
+                    repository_id = int(row["github_repository_id"])
+                    source_intelligence[repository_id] = self._source_intelligence(connection, repository_id)
+            finally:
+                connection.close()
         cards = []
         for row in rows:
             card = _with_usage(self.root, _card(row))
@@ -107,6 +234,9 @@ class DashboardReadModel:
             feedback = latest_feedback.get(int(row["github_repository_id"]))
             human_decision = feedback if feedback and feedback.get("label") in HUMAN_DECISION_LABELS else None
             card["human_decision"] = human_decision
+            card["method_adoption_state"] = method_adoption.get(int(row["github_repository_id"]))
+            card.update(source_intelligence.get(int(row["github_repository_id"]), {}))
+            card["entity_kind"] = "SOURCE"
             card = project_human_library_item(
                 card,
                 latest_feedback=human_decision,
@@ -281,6 +411,10 @@ class DashboardReadModel:
 
     def snapshot(self) -> dict[str, Any]:
         cards = self.capabilities()
+        entities = self._entity_snapshot()
+        owned_capabilities = entities["capability_entities"]
+        adopted_methods = entities["method_entities"]
+        stale_reviews = entities["stale_reviews"]
         categories = [card.get("human_category", "") for card in cards]
         validating = []
         recent = []
@@ -295,29 +429,34 @@ class DashboardReadModel:
         return {
             "product": "TechChancellor",
             "name_zh": "技术丞相",
-            "status": "异常" if health.get("status") == "NOT_EVALUATED" else "提醒" if health.get("status") == "DEGRADED_HISTORY_ONLY" else "正常",
+            "status": "异常" if health.get("status") == "NOT_EVALUATED" else "提醒" if str(health.get("status", "")).startswith("DEGRADED") else "正常",
             "health": health,
             "counts": {
                 "total": len(cards),
                 "reviewed_projects": len(cards),
-                "usable": sum(category in {"USED", "USABLE"} for category in categories),
-                "directly_usable": sum(category in {"USED", "USABLE"} for category in categories),
-                "used": categories.count("USED"),
-                "adopted_methods": categories.count("ADOPTED_METHOD"),
-                "active_patterns": categories.count("ADOPTED_METHOD"),
+                "usable": sum(any(state in {"AVAILABLE", "USED"} for state in item["personal_states"]) for item in owned_capabilities),
+                "directly_usable": sum(any(state in {"AVAILABLE", "USED"} for state in item["personal_states"]) for item in owned_capabilities),
+                "used": sum("USED" in item["personal_states"] for item in owned_capabilities),
+                "used_capabilities": sum("USED" in item["personal_states"] for item in owned_capabilities),
+                "available_capabilities": sum("AVAILABLE" in item["personal_states"] for item in owned_capabilities),
+                "adopted_methods": len(adopted_methods),
+                "active_patterns": len(adopted_methods),
                 "processing": categories.count("VALIDATING"),
                 "validating": categories.count("VALIDATING"),
+                "waiting_validation": categories.count("WAITING_VALIDATION"),
                 "watchlist": categories.count("WATCHLIST"),
                 "human_gated": categories.count("HUMAN_DECISION"),
                 "not_adopted": sum(category in {"NOT_ADOPTED", "VALIDATION_FAILED", "ARCHIVED"} for category in categories),
+                "stale_reviews": len(stale_reviews),
             },
             "latest_scan": health.get("latest_scan_run"),
             "latest_chancellor": health.get("latest_stage_b_run"),
             "recent_discoveries": recent,
             "validating": validating,
-            "my_capabilities_cards": [card for card in cards if card.get("human_category") in {"USED", "USABLE"}],
-            "method_cards": [card for card in cards if card.get("human_category") == "ADOPTED_METHOD"],
-            "pending_cards": [card for card in cards if card.get("human_category") in {"VALIDATING", "HUMAN_DECISION"}],
+            **entities,
+            "my_capabilities_cards": owned_capabilities,
+            "method_cards": adopted_methods,
+            "pending_cards": [card for card in cards if card.get("human_category") in {"WAITING_VALIDATION", "VALIDATING", "HUMAN_DECISION"}],
             "watch_archive_cards": [card for card in cards if card.get("human_category") in {"WATCHLIST", "NOT_ADOPTED", "VALIDATION_FAILED", "ARCHIVED"}],
             "directly_usable_cards": [card for card in cards if card.get("human_category") in {"USED", "USABLE"}],
             "knowledge_cards": [card for card in cards if card.get("human_category") == "ADOPTED_METHOD"],

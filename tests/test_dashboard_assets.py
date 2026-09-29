@@ -66,11 +66,17 @@ class DashboardAssetTests(unittest.TestCase):
         self.assertIn("librarySection: 'mine'", self.script)
         self.assertIn("data-library-section", self.script)
         self.assertIn("human_category", self.script)
+        self.assertIn("capability_entities", self.script)
+        self.assertIn("method_entities", self.script)
+        self.assertIn("#ability/", self.script)
+        self.assertIn("#method/", self.script)
+        self.assertIn("source_freshness", self.script)
+        self.assertIn("stale_reviews", self.script)
 
-    def test_home_counts_real_capabilities_methods_processing_and_watchlist(self):
+    def test_home_counts_real_capabilities_methods_waiting_and_watchlist(self):
         self.assertIn("可用能力", self.script)
         self.assertIn("已采用方法", self.script)
-        self.assertIn("正在处理", self.script)
+        self.assertIn("等待验证", self.script)
         self.assertIn("观察清单", self.script)
         self.assertIn("已评审项目总数", self.script)
         self.assertNotIn("项能力已进入本地能力库", self.script)

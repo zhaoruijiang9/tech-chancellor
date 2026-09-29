@@ -49,6 +49,7 @@ def health_report(root: str | Path) -> dict:
             "tasks": [],
             "latest_scan_run": None,
             "latest_stage_b_run": None,
+            "latest_upstream_run": None,
             "decision_history_count": 0,
             "unique_decision_repositories": 0,
             "issues": ["DATABASE_NOT_INITIALIZED"],
@@ -58,6 +59,14 @@ def health_report(root: str | Path) -> dict:
         connection.row_factory = sqlite3.Row
         scan = _latest(connection, "scan_runs")
         stage_b = _latest(connection, "stage_b_runs")
+        upstream = _latest(connection, "upstream_check_runs") if connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='upstream_check_runs'"
+        ).fetchone() else None
+        review_exhausted = connection.execute(
+            "SELECT count(*) FROM delta_review_queue WHERE status='PENDING' AND review_attempts>=3"
+        ).fetchone()[0] if connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='delta_review_queue'"
+        ).fetchone() else 0
         history_count = connection.execute("SELECT count(*) FROM chancellor_decision_history").fetchone()[0]
         unique_history = connection.execute("SELECT count(DISTINCT github_repository_id) FROM chancellor_decision_history").fetchone()[0]
         legacy_incomplete = connection.execute("SELECT count(*) FROM scan_runs WHERE completed_at IS NULL").fetchone()[0]
@@ -101,7 +110,16 @@ def health_report(root: str | Path) -> dict:
     if history_count > unique_history and status == "HEALTHY":
         status = "DEGRADED_HISTORY_ONLY"
         issues.append("LEGACY_DUPLICATE_HISTORY_PRESERVED")
+    if upstream and upstream["status"] in {"FAILED", "PARTIAL_FAILURE"}:
+        issues.append("UPSTREAM_CHECK_" + str(upstream.get("failure_class") or "SYSTEM") + "_FAILED")
+        if status in {"HEALTHY", "DEGRADED_HISTORY_ONLY"}:
+            status = "DEGRADED"
+    if review_exhausted:
+        issues.append("UPSTREAM_REVIEW_NEEDS_ATTENTION")
+        if status in {"HEALTHY", "DEGRADED_HISTORY_ONLY"}:
+            status = "DEGRADED"
     return {"status": status, "active_pending": active, "locks": locks, "tasks": tasks,
             "latest_scan_run": scan, "latest_stage_b_run": stage_b,
+            "latest_upstream_run": upstream,
             "decision_history_count": history_count, "unique_decision_repositories": unique_history,
             "issues": issues}

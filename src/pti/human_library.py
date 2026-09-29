@@ -9,6 +9,7 @@ HUMAN_CATEGORY_LABELS = {
     "USED": "已经实际使用",
     "USABLE": "现在可以使用",
     "ADOPTED_METHOD": "已采用的方法",
+    "WAITING_VALIDATION": "已批准，等待验证",
     "VALIDATING": "正在处理",
     "HUMAN_DECISION": "需要你决定",
     "WATCHLIST": "继续观察",
@@ -17,16 +18,7 @@ HUMAN_CATEGORY_LABELS = {
     "ARCHIVED": "已归档",
 }
 
-ADOPTED_METHODS = {
-    "bmad-code-org/BMAD-METHOD": {
-        "reason": "已提炼出小型决策包、显式评审门和可追踪交付物，并在复杂开发任务中作为结构化方法使用。",
-        "next_step": "继续按任务需要局部使用，不安装 BMAD 全套运行环境。",
-    },
-    "github/spec-kit": {
-        "reason": "规格先行、可验收计划和实现前门槛已经进入当前开发工作方式，采用的是方法而不是整套工具。",
-        "next_step": "在边界复杂的任务中继续使用规格先行，不引入平行工作流。",
-    },
-}
+METHOD_SOURCES = {"bmad-code-org/BMAD-METHOD", "github/spec-kit"}
 
 EXPLICIT_NON_ADOPTIONS = {
     "FoundationAgents/MetaGPT": {
@@ -158,15 +150,21 @@ def project_human_library_item(
         item_kind = "CAPABILITY"
         reason = "受控试用已启用，当前具备可调用入口，但还没有真实使用证据。"
         next_step = "在合适的低风险任务中使用并记录结果。"
-    elif repository in ADOPTED_METHODS:
+    elif repository in METHOD_SOURCES and card.get("method_adoption_state") == "ADOPTED":
         category = "ADOPTED_METHOD"
-        item_kind = "PATTERN_METHOD"
-        reason = ADOPTED_METHODS[repository]["reason"]
-        next_step = ADOPTED_METHODS[repository]["next_step"]
+        item_kind = "METHOD_SOURCE"
+        reason = "该来源至少有一个方法同时具备可验证的工作流机制和真实使用证据。"
+        next_step = "继续通过已记录的工作流机制使用，并保留使用证据。"
+    elif repository in METHOD_SOURCES:
+        category = "WATCHLIST"
+        item_kind = "METHOD_SOURCE"
+        reason = "已提炼出方法参考，但没有发现可验证的本地工作流机制和对应使用证据。"
+        next_step = "保留为知识参考；只有真实进入工作流后才能标记为已采用。"
     elif feedback and feedback.get("label") == "APPROVE_FOR_REVIEW":
-        category = "VALIDATING"
+        active = any(record.get("status") == "PROCESSING" for record in queue)
+        category = "VALIDATING" if active else "WAITING_VALIDATION"
         item_kind = "CANDIDATE"
-        processing_state = "AUTHORIZED_FOR_REVIEW"
+        processing_state = "IN_PROGRESS" if active else "APPROVED_WAITING_VALIDATION"
         reason = SPECIAL_CANDIDATES.get(repository, {}).get(
             "reason", "用户已允许后续隔离评估；这不是安装或采用证明。"
         )

@@ -1,0 +1,19 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["outcome", "evidence"],
+  "properties": {
+    "outcome": {
+      "type": "string",
+      "enum": [
+        "NO_RELEVANT_CHANGE",
+        "REVIEW_STILL_VALID",
+        "REVIEW_UPDATED",
+        "REVALIDATION_REQUIRED",
+        "OWNER_DECISION_MAY_CHANGE",
+        "INSUFFICIENT_EVIDENCE"
+      ]
+    },
+    "evidence": {"type": "string"}
+  }
+}

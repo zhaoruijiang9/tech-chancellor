@@ -5,6 +5,7 @@ from pathlib import Path
 
 from .models import RepositoryRecord
 from .chancellor_contract import validate_decision
+from .capability_intelligence import initialize_capability_schema
 
 
 class Database:
@@ -27,6 +28,7 @@ class Database:
 
     def initialize(self) -> None:
         with self._connect() as connection:
+            initialize_capability_schema(connection)
             connection.execute(
                 """
                 CREATE TABLE IF NOT EXISTS repositories (
