@@ -10,10 +10,15 @@ def _write(root: Path, filename: str, payload: bytes, manifest: dict[str, Any]) 
     root = root.resolve()
     root.mkdir(parents=True, exist_ok=True)
     path = root / filename
-    path.write_bytes(payload)
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_bytes(payload)
+    temporary.replace(path)
     manifest = {**manifest, "path": str(path), "sha256": hashlib.sha256(payload).hexdigest(),
                 "download_time": datetime.now(timezone.utc).isoformat()}
-    path.with_suffix(path.suffix + ".json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+    manifest_path = path.with_suffix(path.suffix + ".json")
+    manifest_tmp = manifest_path.with_suffix(manifest_path.suffix + ".tmp")
+    manifest_tmp.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+    manifest_tmp.replace(manifest_path)
     return manifest
 
 

@@ -19,15 +19,16 @@ ACTIVATION_STATES = {
     "NOT_ELIGIBLE", "QUARANTINE_READY", "QUARANTINED", "STATIC_ANALYSIS_PASS",
     "STATIC_ANALYSIS_FAIL", "ISOLATED_TEST_PASS", "ISOLATED_TEST_FAIL",
     "TRIAL_ENABLED", "TRIAL_DISABLED", "ACTIVE_PATTERN", "USED", "ROLLED_BACK",
+    "BLOCKED_HUMAN", "FAILED_WITH_EXPLAINED_REASON",
 }
 EVIDENCE_MATURITY = {"REVIEWED": "REVIEWED", "TESTED": "TESTED", "USED": "USED"}
 
 STATE_TRANSITIONS = {
     "REVIEWED": {"QUARANTINE_READY", "ACTIVE_PATTERN"},
     "NOT_ELIGIBLE": {"ACTIVE_PATTERN"},
-    "QUARANTINE_READY": {"QUARANTINED", "TRIAL_DISABLED"},
-    "QUARANTINED": {"STATIC_ANALYSIS_PASS", "STATIC_ANALYSIS_FAIL", "ROLLED_BACK"},
-    "STATIC_ANALYSIS_PASS": {"ISOLATED_TEST_PASS", "ISOLATED_TEST_FAIL", "ROLLED_BACK"},
+    "QUARANTINE_READY": {"QUARANTINED", "TRIAL_DISABLED", "BLOCKED_HUMAN", "FAILED_WITH_EXPLAINED_REASON"},
+    "QUARANTINED": {"STATIC_ANALYSIS_PASS", "STATIC_ANALYSIS_FAIL", "ROLLED_BACK", "BLOCKED_HUMAN", "FAILED_WITH_EXPLAINED_REASON"},
+    "STATIC_ANALYSIS_PASS": {"ISOLATED_TEST_PASS", "ISOLATED_TEST_FAIL", "ROLLED_BACK", "BLOCKED_HUMAN", "FAILED_WITH_EXPLAINED_REASON"},
     "ISOLATED_TEST_PASS": {"TRIAL_ENABLED", "ROLLED_BACK"},
     "ISOLATED_TEST_FAIL": {"QUARANTINED", "ROLLED_BACK"},
     "TRIAL_ENABLED": {"USED", "TRIAL_DISABLED", "ROLLED_BACK"},
@@ -106,6 +107,34 @@ def _default_policy_path() -> Path:
 
 def _policy(path: str | Path | None = None) -> dict:
     return json.loads((_default_policy_path() if path is None else Path(path)).read_text(encoding="utf-8"))
+
+
+def evaluate_validation_eligibility(capability: dict, policy_path: str | Path | None = None) -> ActivationPolicyDecision:
+    """Preflight only: downstream evidence is deliberately not required here."""
+    policy = _policy(policy_path)
+    tier = capability.get("activation_tier") or classify_activation_tier(
+        capability.get("consumption_form", "TOOL"), capability.get("best_route", "GENERAL"), capability.get("repository", "")
+    )
+    definition = policy["tiers"].get(tier, policy["tiers"][TIER_4])
+    hazards = {
+        "requires_credential": "CREDENTIAL_REQUIRED", "requires_admin": "ADMIN_REQUIRED",
+        "requires_service": "SERVICE_REQUIRED", "persistent_listener": "PERSISTENT_NETWORK_LISTENER",
+        "system_modification": "SYSTEM_MODIFICATION_REQUIRED", "path_modification": "PATH_MODIFICATION_REQUIRED",
+        "browser_extension": "BROWSER_EXTENSION_REQUIRED", "trading_scope": "TRADING_SCOPE",
+        "protected_project": "PROTECTED_PROJECT", "financial_account": "FINANCIAL_ACCOUNT",
+        "surveillance": "SURVEILLANCE", "global_mutation": "GLOBAL_ENVIRONMENT_MUTATION",
+        "unisolatable_execution": "OS_ISOLATION_REQUIRED",
+    }
+    reasons = [reason for field, reason in hazards.items() if capability.get(field)]
+    if tier not in {TIER_1, TIER_2}:
+        reasons.append("HUMAN_APPROVAL_REQUIRED" if tier in {TIER_3, TIER_4} else "REFERENCE_ONLY")
+    eligible = tier in {TIER_1, TIER_2} and not reasons
+    return ActivationPolicyDecision(
+        tier, eligible, list(definition.get("automatic_actions_allowed", [])) if eligible else [],
+        list(definition.get("human_approval_required_before", [])),
+        list(definition.get("hard_prohibitions", [])) + reasons,
+        "QUARANTINE_READY" if eligible else "NOT_ELIGIBLE", reasons,
+    )
 
 
 def evaluate_activation_policy(capability: dict, evidence: dict, policy_path: str | Path | None = None) -> ActivationPolicyDecision:

@@ -36,6 +36,13 @@ ROOT_DOCUMENTS = {
     "MY_CAPABILITIES.md",
 }
 HUMAN_DECISION_LABELS = {"APPROVE_FOR_REVIEW", "WATCH", "NOT_USEFUL", "TOO_RISKY"}
+ACTIVATION_PHASE_LABELS = {
+    "QUEUED": "候选已选中", "PLAN_READY": "准备隔离验证", "SOURCE_PINNED": "来源版本已固定",
+    "QUARANTINED": "静态检查", "STATIC_ANALYSIS_PASS": "建立隔离环境",
+    "ISOLATED_INSTALL_PASS": "安装测试", "FUNCTIONAL_TEST_PASS": "能力评估",
+    "EVALUATION_PASS": "准备启用", "AVAILABLE": "已验证可用",
+    "EVALUATION_NO_DELTA": "无明确增益",
+}
 
 
 def _parse_time(value: str | None) -> str:
@@ -300,16 +307,16 @@ class DashboardReadModel:
             SELECT q.*, r.canonical_owner_repo, r.url
             FROM activation_queue q LEFT JOIN repositories r
               ON r.github_repository_id=q.repository_id
-            WHERE q.status IN ('PENDING','PROCESSING')
+            WHERE q.status IN ('PENDING','PROCESSING','RETRYABLE')
             ORDER BY q.created_at DESC, q.id DESC
         """).fetchall()
         return [{
             "repository": row["canonical_owner_repo"] or f"repository:{row['repository_id']}",
             "url": row["url"],
-            "step": "等待验证" if row["status"] == "PENDING" else "正在处理",
+            "step": ACTIVATION_PHASE_LABELS.get(row["phase"], "等待验证") if row["status"] != "RETRYABLE" else "等待重试",
             "started_at": row["last_attempt_at"] or row["created_at"],
             "risk": row["activation_tier"],
-            "result": row["desired_next_state"],
+            "result": row["failure_class"] or row["desired_next_state"],
             "status": row["status"],
         } for row in rows]
 
@@ -344,6 +351,17 @@ class DashboardReadModel:
                 for row in rows:
                     raw_status = row["activation_state"]
                     events.append({"type": "activation", "time": row["updated_at"], "title": "能力状态变化", "repository": row["canonical_owner_repo"] or "未知项目", "url": row["url"], "status": _human_activity_status(raw_status), "machine_status": raw_status, "detail": row["notes"] or ""})
+            if self._table_exists(connection, "activation_queue"):
+                rows = connection.execute("""SELECT q.*,r.canonical_owner_repo,r.url FROM activation_queue q
+                    LEFT JOIN repositories r ON r.github_repository_id=q.repository_id
+                    ORDER BY q.id DESC LIMIT 30""").fetchall()
+                for row in rows:
+                    phase = row["phase"]
+                    events.append({"type": "activation", "time": row["updated_at"],
+                        "title": "能力验证", "repository": row["canonical_owner_repo"] or "未知项目",
+                        "url": row["url"], "status": ACTIVATION_PHASE_LABELS.get(phase, phase),
+                        "machine_status": row["status"],
+                        "detail": row["failure_class"] or ("阶段：" + phase)})
             events.sort(key=lambda item: _safe_date_sort(item.get("time")), reverse=True)
             return events[:max(1, limit)]
         finally:

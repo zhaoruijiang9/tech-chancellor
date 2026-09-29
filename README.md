@@ -36,6 +36,8 @@ python run.py my-capabilities
 
 `init` 是幂等操作，可安全重复运行。`scan` 默认是公开 GitHub 数据的手动 dry-run；Codex 语义审查和 Windows 计划任务均为可选的后续配置，不会在初始化时自动启用。
 
+受控能力验证可手动运行 `python run.py activation-run`，用 `python run.py activation-status` 查看阶段与阻断原因。已启用的只读索引可用 `python run.py activation-search pdf` 查询；检索结果只是未经独立审核的第三方链接，不会安装其中的 skill。定时 Chancellor 脚本会在语义审查结束后单独调用 activation worker，也可独立调度 `run_scheduled_activation.ps1`。需要执行第三方代码、访问凭据或启动服务的候选不会因此自动运行。
+
 ## Human Control Center
 
 After initialization, double-click `打开技术丞相.cmd` to open the local Control Center. It starts a loopback-only desktop-style browser window by default. For a normal browser window or automated checks, use `python run.py dashboard --browser` or `python run.py dashboard --no-browser`. The dashboard is read-mostly: it shows discoveries, validation, capabilities, system status, and local documents. For capabilities explicitly marked as requiring a human decision, it may record one of three bounded choices: continue isolated review, keep watching, or do not adopt. Recording a choice never installs or runs the project and never connects it to `D:\money`.

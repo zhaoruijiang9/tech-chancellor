@@ -206,6 +206,12 @@ def project_human_library_item(
         item_kind = "PROJECT"
         reason = EXPLICIT_NON_ADOPTIONS[repository]["reason"]
         next_step = EXPLICIT_NON_ADOPTIONS[repository]["next_step"]
+    elif any(record.get("status") in {"PENDING", "PROCESSING", "RETRYABLE"} for record in queue):
+        category = "VALIDATING"
+        item_kind = "CANDIDATE"
+        processing_state = "IN_PROGRESS"
+        reason = "候选正在受控验证；尚未形成可用或真实使用证据。"
+        next_step = "查看验证阶段和阻断原因。"
     elif repository in WATCHLIST_ITEMS:
         category = "WATCHLIST"
         item_kind = WATCHLIST_ITEMS[repository]["kind"]

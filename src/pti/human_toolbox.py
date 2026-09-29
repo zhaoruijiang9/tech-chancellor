@@ -52,6 +52,8 @@ def build_human_toolbox(root: str | Path, db_path: str | Path | None = None) -> 
         ))
     direct = entities["capability_entities"]
     patterns = entities["method_entities"]
+    usable_entrypoints = {card["repository"]: card["user_entrypoint"] for card in cards
+                          if card["human_category"] in {"USABLE", "USED"}}
     pending = [card for card in cards if card["human_category"] in {"WAITING_VALIDATION", "VALIDATING", "HUMAN_DECISION"}]
     reference = [card for card in cards if card["human_category"] in {"WATCHLIST", "NOT_ADOPTED", "VALIDATION_FAILED", "ARCHIVED"}]
 
@@ -68,6 +70,9 @@ def build_human_toolbox(root: str | Path, db_path: str | Path | None = None) -> 
             lines.extend([f"### {item['name']}", f"- 说明：{item['description']}",
                           f"- 来源：{'、'.join(sources) or '本地工作流'}",
                           f"- 状态：{'、'.join(item.get('personal_states', [])) if item.get('capability_id') else '已记录机制与实际使用证据'}", ""])
+            for source in dict.fromkeys(sources):
+                if source in usable_entrypoints:
+                    lines.insert(len(lines) - 1, f"- 入口：{usable_entrypoints[source]}")
 
     def section(title: str, items: list[dict[str, Any]]) -> None:
         lines.extend([f"## {title}", ""])

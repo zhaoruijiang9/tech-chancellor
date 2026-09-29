@@ -135,6 +135,16 @@ class Database:
                 status TEXT NOT NULL DEFAULT 'PENDING',
                 failure_class TEXT
             )""")
+            queue_columns = {row[1] for row in connection.execute("PRAGMA table_info(activation_queue)")}
+            for name, definition in {
+                "phase": "TEXT NOT NULL DEFAULT 'QUEUED'",
+                "contract_json": "TEXT NOT NULL DEFAULT '{}'",
+                "evidence_json": "TEXT NOT NULL DEFAULT '{}'",
+                "updated_at": "TEXT",
+            }.items():
+                if name not in queue_columns:
+                    connection.execute(f"ALTER TABLE activation_queue ADD COLUMN {name} {definition}")
+            connection.execute("UPDATE activation_queue SET updated_at=COALESCE(updated_at,created_at) WHERE updated_at IS NULL")
             connection.execute("""UPDATE scan_runs SET status='INTERRUPTED_LEGACY_RUNTIME_REGRESSION',
                 completed_at=COALESCE(completed_at, started_at)
                 WHERE completed_at IS NULL AND (status IS NULL OR status='')""")
@@ -338,11 +348,13 @@ class Database:
                 real_use_outcome=?, real_use_evidence=?, updated_at=CURRENT_TIMESTAMP
                 WHERE github_repository_id=?""",
                 (project_label[:300], task_type[:120], outcome[:1000], evidence[:2000], repository_id))
+        from .capability_intelligence import project_activation_state
+        project_activation_state(self.path, repository_id, "USED", f"real-use:{repository_id}:{evidence[:120]}")
 
     def enqueue_activation(self, repository_id: int, activation_tier: str, desired_next_state: str, reason: str) -> int:
         with self._connect() as connection:
             existing = connection.execute("""SELECT id FROM activation_queue
-                WHERE repository_id=? AND desired_next_state=? AND status IN ('PENDING','PROCESSING')
+                WHERE repository_id=? AND desired_next_state=? AND status IN ('PENDING','PROCESSING','RETRYABLE')
                 ORDER BY id DESC LIMIT 1""", (repository_id, desired_next_state)).fetchone()
             if existing:
                 return int(existing[0])
@@ -362,10 +374,26 @@ class Database:
     def claim_activation(self, queue_id: int) -> dict | None:
         with self._connect() as connection:
             connection.execute("""UPDATE activation_queue SET status='PROCESSING',
-                attempt_count=attempt_count+1, last_attempt_at=CURRENT_TIMESTAMP
-                WHERE id=? AND status='PENDING'""", (queue_id,))
+                attempt_count=attempt_count+1, last_attempt_at=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP
+                WHERE id=? AND status IN ('PENDING','RETRYABLE','PROCESSING') AND attempt_count<3""", (queue_id,))
             row = connection.execute("SELECT * FROM activation_queue WHERE id=?", (queue_id,)).fetchone()
         return dict(row) if row else None
+
+    def update_activation_job(self, queue_id: int, phase: str, evidence: dict | None = None,
+                              contract: dict | None = None) -> dict:
+        with self._connect() as connection:
+            row = connection.execute("SELECT * FROM activation_queue WHERE id=?", (queue_id,)).fetchone()
+            if row is None or row["status"] != "PROCESSING":
+                raise ValueError("activation job must be processing")
+            merged = json.loads(row["evidence_json"] or "{}")
+            merged.update(evidence or {})
+            connection.execute("""UPDATE activation_queue SET phase=?, evidence_json=?, contract_json=?,
+                updated_at=CURRENT_TIMESTAMP WHERE id=?""", (
+                    phase, json.dumps(merged, ensure_ascii=False, sort_keys=True),
+                    json.dumps(contract, ensure_ascii=False, sort_keys=True) if contract is not None else row["contract_json"], queue_id,
+                ))
+            result = connection.execute("SELECT * FROM activation_queue WHERE id=?", (queue_id,)).fetchone()
+        return dict(result)
 
     def complete_activation(self, queue_id: int, status: str, failure_class: str | None = None) -> None:
         if status not in {"SUCCEEDED", "RETRYABLE", "BLOCKED_HUMAN", "FAILED_TERMINAL"}:

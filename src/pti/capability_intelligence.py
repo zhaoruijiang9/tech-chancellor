@@ -103,6 +103,81 @@ CAPABILITY_RELATIONS = [
 ]
 
 
+def project_activation_state(db_path: str | Path, repository_id: int, state: str, evidence_ref: str) -> None:
+    """Project verified execution facts; activation_records remains the lifecycle authority."""
+    if state not in {"VERIFIED", "AVAILABLE", "USED"} or not evidence_ref:
+        raise ValueError("projection requires a verified state and evidence")
+    connection = sqlite3.connect(db_path)
+    try:
+        row = connection.execute("""SELECT i.implementation_id,a.activation_state,a.isolated_test_status,
+            a.rollback_status FROM capability_implementations i
+            JOIN capability_sources s ON s.source_id=i.source_id
+            JOIN activation_records a ON a.github_repository_id=s.github_repository_id
+            WHERE s.github_repository_id=?""", (repository_id,)).fetchone()
+        if row is None:
+            return
+        implementation_id, activation_state, test_status, rollback = row
+        if activation_state not in {"ISOLATED_TEST_PASS", "TRIAL_ENABLED", "USED"} or test_status != "PASS" or rollback != "READY":
+            raise ValueError("verified activation evidence missing")
+        if state in {"AVAILABLE", "USED"} and activation_state not in {"TRIAL_ENABLED", "USED"}:
+            raise ValueError("availability requires enabled trial")
+        if state == "USED" and activation_state != "USED":
+            raise ValueError("real-use record missing")
+        targets = [item[0] for item in connection.execute(
+            "SELECT capability_id FROM implementation_capabilities WHERE implementation_id=?", (implementation_id,)
+        )]
+        connection.execute("""DELETE FROM personal_states WHERE subject_type='IMPLEMENTATION'
+            AND subject_id=? AND state IN ('WATCHLIST','VALIDATING')""", (implementation_id,))
+        for subject_type, subject_ids in (("IMPLEMENTATION", [implementation_id]), ("CAPABILITY", targets)):
+            for subject_id in subject_ids:
+                connection.execute("""INSERT INTO personal_states(subject_type,subject_id,state,evidence_ref)
+                    VALUES (?,?,?,?) ON CONFLICT(subject_type,subject_id,state) DO UPDATE SET
+                    evidence_ref=excluded.evidence_ref,updated_at=CURRENT_TIMESTAMP""",
+                    (subject_type, subject_id, state, evidence_ref))
+        connection.execute("""UPDATE capability_implementations SET lifecycle_state=?, updated_at=CURRENT_TIMESTAMP
+            WHERE implementation_id=?""", (activation_state, implementation_id))
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def revoke_activation_availability(db_path: str | Path, repository_id: int) -> None:
+    connection = sqlite3.connect(db_path)
+    try:
+        row = connection.execute("""SELECT i.implementation_id FROM capability_implementations i
+            JOIN capability_sources s ON s.source_id=i.source_id WHERE s.github_repository_id=?""",
+            (repository_id,)).fetchone()
+        if row is None:
+            return
+        implementation_id = row[0]
+        connection.execute("""DELETE FROM personal_states WHERE subject_type='IMPLEMENTATION'
+            AND subject_id=? AND state='AVAILABLE'""", (implementation_id,))
+        connection.execute("""UPDATE capability_implementations SET lifecycle_state='ROLLED_BACK',
+            updated_at=CURRENT_TIMESTAMP WHERE implementation_id=?""", (implementation_id,))
+        capability_ids = [item[0] for item in connection.execute(
+            "SELECT capability_id FROM implementation_capabilities WHERE implementation_id=?", (implementation_id,)
+        )]
+        for capability_id in capability_ids:
+            other = connection.execute("""SELECT 1 FROM implementation_capabilities m
+                JOIN capability_implementations i ON i.implementation_id=m.implementation_id
+                JOIN capability_sources s ON s.source_id=i.source_id
+                JOIN activation_records a ON a.github_repository_id=s.github_repository_id
+                WHERE m.capability_id=? AND i.implementation_id<>? AND a.activation_state IN ('TRIAL_ENABLED','USED')
+                LIMIT 1""", (capability_id, implementation_id)).fetchone()
+            if not other:
+                connection.execute("""DELETE FROM personal_states WHERE subject_type='CAPABILITY'
+                    AND subject_id=? AND state='AVAILABLE'""", (capability_id,))
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
 def initialize_capability_schema(connection: sqlite3.Connection) -> None:
     connection.executescript(
         """

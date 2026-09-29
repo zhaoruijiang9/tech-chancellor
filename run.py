@@ -19,11 +19,12 @@ from pti.capability_intelligence import CapabilityStore
 from pti.storage import Database
 from pti.upstream_intelligence import GitHubFingerprintProvider, check_upstream
 from pti.upstream_review import CodexDeltaReviewer, review_pending_deltas
+from pti.activation_worker import enqueue_selected_pilots, run_activation_worker, search_active_index
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Manual Phase 1 technology intelligence run")
-    parser.add_argument("action", nargs="?", choices=["init", "scan", "stage-b", "feedback", "pending-count", "health", "build-library", "my-capabilities", "search-capabilities", "dashboard", "install-shortcut", "migrate-capabilities", "check-upstream", "review-upstream", "review-delta"], default="scan")
+    parser.add_argument("action", nargs="?", choices=["init", "scan", "stage-b", "activation-run", "activation-status", "activation-search", "feedback", "pending-count", "health", "build-library", "my-capabilities", "search-capabilities", "dashboard", "install-shortcut", "migrate-capabilities", "check-upstream", "review-upstream", "review-delta"], default="scan")
     parser.add_argument("repo", nargs="?")
     parser.add_argument("label", nargs="?")
     parser.add_argument("note", nargs="?", default="")
@@ -49,6 +50,25 @@ def main() -> int:
     parser.add_argument("--review-evidence", default="")
     args = parser.parse_args()
     root = Path(__file__).parent
+    if args.action in {"activation-run", "activation-status", "activation-search"}:
+        if args.action == "activation-search":
+            if not args.repo:
+                parser.error("activation-search requires a query")
+            print(json.dumps({"query": args.repo, "results": search_active_index(root, args.repo),
+                              "warning": "Linked third-party skills are unreviewed and not installed."},
+                             ensure_ascii=False, indent=2))
+            return 0
+        db = Database(root / "state" / "intelligence.db")
+        db.initialize()
+        if args.action == "activation-status":
+            print(json.dumps({"jobs": db.list_activation_queue()}, ensure_ascii=False, indent=2))
+            return 0
+        selected = enqueue_selected_pilots(db, limit=1)
+        results = run_activation_worker(root, db, limit=args.limit)
+        if any(item["status"] == "SUCCEEDED" for item in results):
+            build_human_toolbox(root)
+        print(json.dumps({"selected": selected, "results": results}, ensure_ascii=False, indent=2))
+        return 0 if all(item["status"] in {"SUCCEEDED", "ALREADY_ACTIVE_OR_LOCKED"} for item in results) else 1
     if args.action in {"migrate-capabilities", "check-upstream", "review-upstream", "review-delta"}:
         db_path = root / "state" / "intelligence.db"
         Database(db_path).initialize()
