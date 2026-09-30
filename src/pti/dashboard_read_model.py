@@ -124,12 +124,39 @@ class DashboardReadModel:
             """SELECT review_outcome,review_evidence,reviewed_at FROM delta_review_queue
             WHERE source_id=? AND status='REVIEWED' ORDER BY id DESC LIMIT 1""", (source_id,)
         ).fetchone()
+        readiness = None
+        if self._table_exists(connection, "activation_readiness"):
+            readiness = connection.execute("""SELECT r.category,r.blocker,r.audited_at
+                FROM activation_readiness r JOIN capability_implementations i USING(implementation_id)
+                WHERE i.source_id=? ORDER BY r.audited_at DESC LIMIT 1""", (source_id,)).fetchone()
+        usage = None
+        if self._table_exists(connection, "capability_invocations"):
+            rows = connection.execute("""SELECT v.* FROM capability_invocations v
+                JOIN capability_implementations i USING(implementation_id)
+                WHERE i.source_id=? ORDER BY v.id DESC LIMIT 100""", (source_id,)).fetchall()
+            if rows:
+                latest = rows[0]
+                failures = 0
+                for row in rows:
+                    if row["success"]:
+                        break
+                    failures += 1
+                usage = {"consumer": latest["consumer"], "last_invocation_at": latest["invoked_at"],
+                         "last_result": _json(latest["output_summary_json"], {}),
+                         "last_material_use_at": next((row["invoked_at"] for row in rows if row["material_use"]), None),
+                         "last_material_summary": next((_json(row["output_summary_json"], {}) for row in rows
+                                                        if row["material_use"]), None),
+                         "health": {"last_successful_invocation": next((row["invoked_at"] for row in rows if row["success"]), None),
+                                    "last_failed_invocation": next((row["invoked_at"] for row in rows if not row["success"]), None),
+                                    "consecutive_failures": failures}}
         return {
             "source_id": source_id,
             "source_type": source["source_type"],
             "capability_mappings": mappings,
             "source_freshness": dict(freshness) if freshness else None,
             "latest_delta_review": dict(review) if review else None,
+            "activation_readiness": dict(readiness) if readiness else None,
+            "capability_usage": usage,
         }
 
     def _entity_snapshot(self) -> dict[str, list[dict[str, Any]]]:
@@ -362,6 +389,28 @@ class DashboardReadModel:
                         "url": row["url"], "status": ACTIVATION_PHASE_LABELS.get(phase, phase),
                         "machine_status": row["status"],
                         "detail": row["failure_class"] or ("阶段：" + phase)})
+            if self._table_exists(connection, "capability_invocations"):
+                rows = connection.execute("""SELECT v.*,s.canonical_name,s.url
+                    FROM capability_invocations v
+                    JOIN capability_implementations i USING(implementation_id)
+                    JOIN capability_sources s USING(source_id)
+                    ORDER BY v.id DESC LIMIT 30""").fetchall()
+                for row in rows:
+                    summary = _json(row["output_summary_json"], {})
+                    effect = _json(row["downstream_effect_json"], {})
+                    status = "CAPABILITY_INVOCATION_FAILED" if not row["success"] else "USED" if row["material_use"] else "NO_MATERIAL_USE"
+                    detail = (f"发现 {summary.get('raw_count', 0)} 条索引链接，规范化 {summary.get('normalized_count', 0)} 个仓库，"
+                              f"新线索 {summary.get('new_count', 0)} 个，进入处理 {summary.get('selected_new_count', 0)} 个，"
+                              f"本地语义评审 {summary.get('semantic_reviewed_count', 0)} 个")
+                    if row["failure_code"]:
+                        detail += f"；来源提醒：{row['failure_code']}"
+                    if effect.get("material_rejected_reason") == "IRRELEVANT_FAMILY_HISTORY_RESULT":
+                        detail += "；主题不匹配，未计入真实使用"
+                    events.append({"type": "capability_invocation", "time": row["invoked_at"],
+                                   "title": "Radar 使用能力" if row["consumer"] == "RADAR_DISCOVERY" else "能力调用",
+                                   "repository": row["canonical_name"], "url": row["url"],
+                                   "status": "调用失败" if not row["success"] else "已实际使用" if row["material_use"] else "已调用，无有效新结果",
+                                   "machine_status": status, "detail": detail})
             events.sort(key=lambda item: _safe_date_sort(item.get("time")), reverse=True)
             return events[:max(1, limit)]
         finally:

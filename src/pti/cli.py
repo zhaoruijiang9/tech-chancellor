@@ -53,7 +53,10 @@ def run_once(root: str | Path, config_path: str | Path, profile_path: str | Path
             config = json.loads(Path(config_path).read_text(encoding="utf-8"))
             profile = json.loads(Path(profile_path).read_text(encoding="utf-8"))
             client = GitHubClient(budget=RequestBudget(int(config.get("request_budget", 8))))
-            discovery = run_discovery(config, client, db, profile, run_id)
+            bindings_path = root / "config" / "capability_consumers.json"
+            bindings = json.loads(bindings_path.read_text(encoding="utf-8")).get("bindings", []) if bindings_path.is_file() else []
+            discovery = run_discovery(config, client, db, profile, run_id,
+                                      capability_root=root, consumer_bindings=bindings)
             report = build_report(discovery.decisions, discovery.failures)
             paths = write_inbox_artifacts(root, report.high_priority + report.secondary, run_id)
             paths.extend(write_chancellor_pending(root, report.high_priority + report.secondary, run_id))
@@ -63,7 +66,7 @@ def run_once(root: str | Path, config_path: str | Path, profile_path: str | Path
                 status = "SCAN_SUCCESS_NO_HIGH_SIGNAL"
             db.finish_scan_run(run_id, status, discovery.request_count, len(discovery.failures), utc_now(), len(discovery.decisions))
             db.record_notification_event(run_id, None, "NOTIFICATION_NOT_REQUIRED", "NO_USER_VISIBLE_NOTIFICATION_EMITTED", str(report_path))
-            return {"status": status, "run_id": run_id, "decisions": len(discovery.decisions), "failures": discovery.failures, "request_count": discovery.request_count, "artifacts": [str(path) for path in paths] + [str(report_path)]}
+            return {"status": status, "run_id": run_id, "decisions": len(discovery.decisions), "failures": discovery.failures, "request_count": discovery.request_count, "capability_invocations": discovery.capability_invocations, "artifacts": [str(path) for path in paths] + [str(report_path)]}
         except Exception:
             db.finish_scan_run(run_id, "SCAN_NOT_EVALUATED", 0, 1, utc_now())
             db.record_notification_event(run_id, None, "NOTIFICATION_NOT_REQUIRED", "SCAN_NOT_EVALUATED", str(root / "reports" / "latest.json"))

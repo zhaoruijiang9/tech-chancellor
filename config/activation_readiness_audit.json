@@ -1,0 +1,54 @@
+{
+  "impl:ComposioHQ/awesome-claude-skills": {
+    "category": "READY_WITH_EXISTING_ADAPTER",
+    "blocker": "固定版本的只读索引已可用，等待真实生产使用证据。"
+  },
+  "impl:FoundationAgents/MetaGPT": {
+    "category": "NO_MEANINGFUL_DELTA",
+    "blocker": "与现有 Agent 编排能力高度重叠，当前评审没有找到明确的未满足需求。"
+  },
+  "impl:TauricResearch/TradingAgents": {
+    "category": "HUMAN_GATE",
+    "blocker": "原有人工决策尚未完成；金融 Agent 不属于低风险自动试点。"
+  },
+  "impl:bmad-code-org/BMAD-METHOD": {
+    "category": "NO_MEANINGFUL_DELTA",
+    "blocker": "目前只是知识参考，缺少方法机制与真实使用的合格证据。"
+  },
+  "impl:cased/kit": {
+    "category": "NO_MEANINGFUL_DELTA",
+    "blocker": "现有评审未证明其代码库映射能力优于本地检索。"
+  },
+  "impl:chunkhound/chunkhound": {
+    "category": "REQUIRES_OS_SANDBOX",
+    "blocker": "持久索引或 MCP 运行需要第三方代码隔离；增量价值也尚未验证。"
+  },
+  "impl:coleam00/archon": {
+    "category": "REQUIRES_OS_SANDBOX",
+    "blocker": "保留既有验证失败记录；服务运行所需的固定版本、隔离执行和回滚证据不足。"
+  },
+  "impl:github/spec-kit": {
+    "category": "NO_MEANINGFUL_DELTA",
+    "blocker": "目前只是知识参考，完整工作流尚无已证实的优势或真实使用证据。"
+  },
+  "impl:gmickel/flow-next": {
+    "category": "NO_MEANINGFUL_DELTA",
+    "blocker": "跨 Agent 工作流相对现有规划与复核流程的增益尚未证明。"
+  },
+  "impl:headroomlabs-ai/headroom": {
+    "category": "REQUIRES_OS_SANDBOX",
+    "blocker": "代理或 MCP 压缩组件需运行第三方代码，并可能接触任务上下文。"
+  },
+  "impl:langchain-ai/langchain": {
+    "category": "NO_MEANINGFUL_DELTA",
+    "blocker": "尚无明确增量能力，也没有当前本地问题必须由它解决。"
+  },
+  "impl:nieledran/backtesting-engine": {
+    "category": "HUMAN_GATE",
+    "blocker": "维持已批准、等待验证；凭证和交易边界及隔离验证尚未解决，批准不等于允许运行券商路径。"
+  },
+  "impl:volcengine/MineContext": {
+    "category": "REQUIRES_OS_SANDBOX",
+    "blocker": "桌面上下文采集在启用第三方程序前需要隔离与隐私控制。"
+  }
+}

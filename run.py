@@ -20,11 +20,12 @@ from pti.storage import Database
 from pti.upstream_intelligence import GitHubFingerprintProvider, check_upstream
 from pti.upstream_review import CodexDeltaReviewer, review_pending_deltas
 from pti.activation_worker import enqueue_selected_pilots, run_activation_worker, search_active_index
+from pti.activation_readiness import audit_current_library, second_pilot_candidates
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Manual Phase 1 technology intelligence run")
-    parser.add_argument("action", nargs="?", choices=["init", "scan", "stage-b", "activation-run", "activation-status", "activation-search", "feedback", "pending-count", "health", "build-library", "my-capabilities", "search-capabilities", "dashboard", "install-shortcut", "migrate-capabilities", "check-upstream", "review-upstream", "review-delta"], default="scan")
+    parser.add_argument("action", nargs="?", choices=["init", "scan", "stage-b", "activation-run", "activation-status", "activation-search", "activation-readiness", "feedback", "pending-count", "health", "build-library", "my-capabilities", "search-capabilities", "dashboard", "install-shortcut", "migrate-capabilities", "check-upstream", "review-upstream", "review-delta"], default="scan")
     parser.add_argument("repo", nargs="?")
     parser.add_argument("label", nargs="?")
     parser.add_argument("note", nargs="?", default="")
@@ -50,6 +51,14 @@ def main() -> int:
     parser.add_argument("--review-evidence", default="")
     args = parser.parse_args()
     root = Path(__file__).parent
+    if args.action == "activation-readiness":
+        db = Database(root / "state" / "intelligence.db")
+        db.initialize()
+        classifications = json.loads((root / "config" / "activation_readiness_audit.json").read_text(encoding="utf-8"))
+        result = audit_current_library(db, classifications)
+        result["second_pilot_candidates"] = second_pilot_candidates(db)
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0 if not result["unclassified"] else 1
     if args.action in {"activation-run", "activation-status", "activation-search"}:
         if args.action == "activation-search":
             if not args.repo:

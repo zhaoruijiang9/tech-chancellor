@@ -1,5 +1,5 @@
 {
-  "request_budget": 20,
+  "request_budget": 23,
   "enrichment_level": "STANDARD",
   "enrichment_candidate_cap": 3,
   "per_query_cap": 5,

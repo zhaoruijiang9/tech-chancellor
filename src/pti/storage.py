@@ -3,7 +3,7 @@ import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
 
-from .models import RepositoryRecord
+from .models import RepositoryRecord, utc_now
 from .chancellor_contract import validate_decision
 from .capability_intelligence import initialize_capability_schema
 
@@ -134,6 +134,27 @@ class Database:
                 last_attempt_at TEXT,
                 status TEXT NOT NULL DEFAULT 'PENDING',
                 failure_class TEXT
+            )""")
+            connection.execute("""CREATE TABLE IF NOT EXISTS capability_invocations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                capability_id TEXT NOT NULL, implementation_id TEXT NOT NULL,
+                adapter_type TEXT NOT NULL, consumer TEXT NOT NULL,
+                task_run_id TEXT NOT NULL, input_intent_json TEXT NOT NULL,
+                output_summary_json TEXT NOT NULL, downstream_effect_json TEXT NOT NULL,
+                success INTEGER NOT NULL CHECK(success IN (0,1)),
+                material_use INTEGER NOT NULL CHECK(material_use IN (0,1)),
+                failure_code TEXT, invoked_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(implementation_id, consumer, task_run_id)
+            )""")
+            connection.execute("""CREATE INDEX IF NOT EXISTS capability_invocations_health
+                ON capability_invocations(implementation_id,id DESC)""")
+            connection.execute("""UPDATE capability_invocations
+                SET invoked_at=replace(invoked_at,' ','T') || 'Z'
+                WHERE length(invoked_at)=19 AND substr(invoked_at,11,1)=' '""")
+            connection.execute("""CREATE TABLE IF NOT EXISTS activation_readiness (
+                implementation_id TEXT PRIMARY KEY,
+                category TEXT NOT NULL, blocker TEXT NOT NULL,
+                audited_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )""")
             queue_columns = {row[1] for row in connection.execute("PRAGMA table_info(activation_queue)")}
             for name, definition in {
@@ -330,6 +351,12 @@ class Database:
             row = connection.execute("SELECT * FROM activation_records WHERE github_repository_id = ?", (repository_id,)).fetchone()
         return dict(row) if row else None
 
+    def get_repository_by_name(self, name: str) -> RepositoryRecord | None:
+        with self._connect() as connection:
+            row = connection.execute("SELECT github_repository_id FROM repositories WHERE lower(canonical_owner_repo)=lower(?)",
+                                     (name,)).fetchone()
+        return self.get_repository(int(row[0])) if row else None
+
     def list_activations(self) -> list[dict]:
         with self._connect() as connection:
             rows = connection.execute("SELECT * FROM activation_records ORDER BY github_repository_id").fetchall()
@@ -350,6 +377,28 @@ class Database:
                 (project_label[:300], task_type[:120], outcome[:1000], evidence[:2000], repository_id))
         from .capability_intelligence import project_activation_state
         project_activation_state(self.path, repository_id, "USED", f"real-use:{repository_id}:{evidence[:120]}")
+
+    def record_capability_invocation(self, *, capability_id: str, implementation_id: str,
+                                     adapter_type: str, consumer: str, task_run_id: str,
+                                     input_intent: list[str], output_summary: dict,
+                                     downstream_effect: dict, success: bool,
+                                     material_use: bool, failure_code: str | None = None) -> None:
+        with self._connect() as connection:
+            connection.execute("""INSERT INTO capability_invocations
+                (capability_id,implementation_id,adapter_type,consumer,task_run_id,
+                 input_intent_json,output_summary_json,downstream_effect_json,success,material_use,failure_code,invoked_at)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+                ON CONFLICT(implementation_id,consumer,task_run_id) DO NOTHING""",
+                (capability_id, implementation_id, adapter_type, consumer, task_run_id,
+                 json.dumps(input_intent[:5], ensure_ascii=False),
+                 json.dumps(output_summary, ensure_ascii=False, sort_keys=True),
+                 json.dumps(downstream_effect, ensure_ascii=False, sort_keys=True),
+                 int(success), int(material_use), failure_code, utc_now()))
+
+    def list_capability_invocations(self, limit: int = 30) -> list[dict]:
+        with self._connect() as connection:
+            rows = connection.execute("SELECT * FROM capability_invocations ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+        return [dict(row) for row in rows]
 
     def enqueue_activation(self, repository_id: int, activation_tier: str, desired_next_state: str, reason: str) -> int:
         with self._connect() as connection:

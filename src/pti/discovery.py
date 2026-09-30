@@ -7,6 +7,7 @@ from .policy import Candidate, Evaluation, decide_candidate, score_candidate
 from .chancellor import LocalSemanticChancellor, build_review_packet
 from .storage import Database
 from .review_queue import fingerprint, material_evidence_projection, review_eligibility
+from .capability_invocation import active_bindings, invoke_index, relevant_to_intent
 
 
 @dataclass
@@ -14,6 +15,7 @@ class DiscoveryRun:
     decisions: list[Evaluation] = field(default_factory=list)
     failures: list[dict[str, str]] = field(default_factory=list)
     request_count: int = 0
+    capability_invocations: list[dict[str, Any]] = field(default_factory=list)
 
 
 def _candidate(record: RepositoryRecord, domain: str, historical: RepositoryRecord | None) -> Candidate:
@@ -33,7 +35,8 @@ def _candidate(record: RepositoryRecord, domain: str, historical: RepositoryReco
 
 
 def run_discovery(config: dict[str, Any], client: Any, db: Database, capability_profile: dict[str, Any],
-                  run_id: str | None = None) -> DiscoveryRun:
+                  run_id: str | None = None, *, capability_root=None,
+                  consumer_bindings: list[dict] | None = None) -> DiscoveryRun:
     result = DiscoveryRun()
     query_groups = config.get("query_groups", [])
     per_query_cap = int(config.get("per_query_cap", 5))
@@ -55,6 +58,59 @@ def run_discovery(config: dict[str, Any], client: Any, db: Database, capability_
             for record in api_result.items:
                 hit = hits.setdefault(record.github_repository_id, {"record": record, "hits": []})
                 hit["hits"].append((domain, query))
+
+    invoked: list[dict[str, Any]] = []
+    if run_id and capability_root is not None and consumer_bindings:
+        radar_queries = [query for group in query_groups for query in group.get("queries", [])]
+        known_names = {hit["record"].canonical_owner_repo.lower() for hit in hits.values()}
+        for binding in active_bindings(db, capability_root, consumer_bindings, "RADAR_DISCOVERY"):
+            summary = {"raw_count": 0, "normalized_count": 0, "new_count": 0,
+                       "rejected_irrelevant_count": 0,
+                       "semantic_reviewed_count": 0}
+            new_ids: set[int] = set()
+            metadata_lookups = 0
+            failure_code = None
+            intent = []
+            try:
+                output = invoke_index(capability_root, binding, radar_queries)
+                intent = output["intents"]
+                summary["raw_count"] = output["raw_count"]
+                summary["normalized_count"] = len(output["normalized"])
+                for item in output["normalized"]:
+                    if metadata_lookups >= min(max(int(binding.get("max_metadata_lookups", 3)), 1), 3):
+                        break
+                    name = item["owner_repo"]
+                    if name.lower() in known_names:
+                        continue
+                    owner, repository = name.split("/", 1)
+                    if db.get_repository_by_name(name) is not None:
+                        continue
+                    response = client.get_repository(owner, repository)
+                    metadata_lookups += 1
+                    result.request_count += 1
+                    if response.failure or not response.items:
+                        failure_code = "GITHUB_LINK_LOOKUP_FAILED"
+                        continue
+                    record = response.items[0]
+                    if not relevant_to_intent(binding, item["intent"], item["name"], record):
+                        summary["rejected_irrelevant_count"] += 1
+                        continue
+                    if record.github_repository_id in hits or db.get_repository(record.github_repository_id):
+                        continue
+                    known_names.add(name.lower())
+                    hit = hits.setdefault(record.github_repository_id, {"record": record, "hits": []})
+                    intent_rule = (binding.get("intent_rules") or {}).get(item["intent"], {})
+                    hit["hits"].append((intent_rule.get("domain", binding.get("discovery_domain", "AI_AGENT")),
+                                        f"capability:{binding['capability_id']}:{item['intent']}"))
+                    new_ids.add(record.github_repository_id)
+                    if len(new_ids) >= min(max(int(binding["max_new_candidates"]), 1), 3):
+                        break
+                summary["new_count"] = len(new_ids)
+                summary["metadata_lookups"] = metadata_lookups
+            except Exception:
+                failure_code = "CAPABILITY_INVOCATION_FAILED"
+            invoked.append({"binding": binding, "summary": summary, "new_ids": new_ids,
+                            "failure_code": failure_code, "intent": intent})
 
     prepared: list[dict[str, Any]] = []
     for hit in hits.values():
@@ -82,17 +138,26 @@ def run_discovery(config: dict[str, Any], client: Any, db: Database, capability_
     prepared.sort(key=lambda item: (-item["evaluation"].total, -item["record"].stars,
                                     item["record"].canonical_owner_repo, item["record"].github_repository_id))
     selected = prepared[:total_cap]
+    new_source_ids = {repository_id for invocation in invoked for repository_id in invocation["new_ids"]}
+    eligible_source = [item for item in prepared if item["record"].github_repository_id in new_source_ids
+                       and item["evaluation"].priority == "HIGH_PRIORITY"]
+    if total_cap > 0 and eligible_source and not any(item in selected for item in eligible_source):
+        selected = selected[:-1] + eligible_source[:1]
+        selected.sort(key=lambda item: (-item["evaluation"].total, -item["record"].stars,
+                                        item["record"].canonical_owner_repo, item["record"].github_repository_id))
     selected_ids = {item["record"].github_repository_id for item in selected}
-    enriched = 0
+    enrich_eligible = [item for item in selected if item["evaluation"].priority in {"HIGH_PRIORITY", "SECONDARY"}]
+    source_enrich = [item for item in enrich_eligible if item["record"].github_repository_id in new_source_ids][:1]
+    enrich_order = source_enrich + [item for item in enrich_eligible if item not in source_enrich]
+    enrich_ids = {item["record"].github_repository_id for item in enrich_order[:enrichment_cap]}
     for item in selected:
         record = item["record"]
         evaluation = item["evaluation"]
         historical = item["historical"]
         eligibility = item["eligibility"]
-        if enriched < enrichment_cap and evaluation.priority in {"HIGH_PRIORITY", "SECONDARY"} and hasattr(client, "enrich_repository"):
+        if record.github_repository_id in enrich_ids and hasattr(client, "enrich_repository"):
             owner, repo = record.canonical_owner_repo.split("/", 1)
             evidence = client.enrich_repository(owner, repo, level=enrichment_level)
-            enriched += 1
             item["enrichment_level"] = evidence.level
             item["enrichment_failures"] = evidence.failures
             evaluation.evidence.append(f"enrichment_level={evidence.level}")
@@ -105,6 +170,8 @@ def run_discovery(config: dict[str, Any], client: Any, db: Database, capability_
                     capability_profile, [], evidence.to_dict()))
         if historical:
             evaluation.evidence.append("historical_identity_match=true")
+        if any(record.github_repository_id in invocation["new_ids"] for invocation in invoked):
+            evaluation.evidence.append("untrusted_capability_index_link=true")
         db.upsert_repository(record)
         db.record_evaluation(
             record.github_repository_id,
@@ -128,4 +195,32 @@ def run_discovery(config: dict[str, Any], client: Any, db: Database, capability_
                     enrichment_level=item["enrichment_level"] if item["record"].github_repository_id in selected_ids else None,
                     enrichment_failures=item["enrichment_failures"] if item["record"].github_repository_id in selected_ids else [],
                 )
+        for invocation in invoked:
+            binding = invocation["binding"]
+            invocation["summary"]["selected_new_count"] = len(invocation["new_ids"] & selected_ids)
+            reviewed = [item for item in selected if item["record"].github_repository_id in invocation["new_ids"]
+                        and item["evaluation"].semantic_review]
+            invocation["summary"]["semantic_reviewed_count"] = len(reviewed)
+            material_reviewed = [item for item in reviewed if item["evaluation"].candidate.readme.strip()
+                                 and item["evaluation"].semantic_review.get("ACTION") == "USER_REVIEW_RECOMMENDED"]
+            material = bool(material_reviewed)
+            downstream = {"new_candidate_ids": sorted(invocation["new_ids"]),
+                          "semantic_reviewed_ids": sorted(item["record"].github_repository_id for item in reviewed),
+                          "material_reviewed_ids": sorted(item["record"].github_repository_id for item in material_reviewed)}
+            db.record_capability_invocation(
+                capability_id=binding["capability_id"], implementation_id=binding["implementation_id"],
+                adapter_type=binding["adapter_type"], consumer="RADAR_DISCOVERY", task_run_id=run_id,
+                input_intent=invocation["intent"], output_summary=invocation["summary"],
+                downstream_effect=downstream, success=invocation["failure_code"] is None,
+                material_use=material, failure_code=invocation["failure_code"])
+            if material:
+                db.record_real_use(binding["repository_id"], "TechChancellor Radar", "capability-source-discovery",
+                                   f"{len(material_reviewed)} new candidate(s) semantically reviewed with source evidence",
+                                   f"scan:{run_id};repo_ids:{','.join(str(item['record'].github_repository_id) for item in material_reviewed)}",
+                                   real_task_evidence=True)
+            result.capability_invocations.append({"capability_id": binding["capability_id"],
+                "implementation_id": binding["implementation_id"], "consumer": "RADAR_DISCOVERY",
+                "material_use": material, "failure_code": invocation["failure_code"], **invocation["summary"]})
+    if hasattr(client, "budget") and hasattr(client.budget, "used"):
+        result.request_count = client.budget.used
     return result

@@ -1,0 +1,33 @@
+{
+  "bindings": [
+    {
+      "capability_id": "SKILL_ECOSYSTEM_DISCOVERY",
+      "implementation_id": "impl:ComposioHQ/awesome-claude-skills",
+      "consumer": "RADAR_DISCOVERY",
+      "adapter_type": "READ_ONLY_MARKDOWN_INDEX",
+      "invoke_entrypoint": "pti.capability_invocation.invoke_index",
+      "accepted_inputs": ["radar_query_intents"],
+      "structured_outputs": ["github_candidate_links", "source_counts"],
+      "when_to_use": "After configured Radar GitHub searches, before candidate ranking and review",
+      "when_not_to_use": "Activation is unavailable, pointer is missing, or the configured intent is absent from Radar queries",
+      "risk_class": "TIER_1_DATA_ONLY",
+      "side_effects": "Local read of pinned README; bounded GitHub metadata lookups through Radar client",
+      "timeout_seconds": 3,
+      "usage_evidence_policy": "USED only when a novel linked repository reaches the existing semantic review",
+      "failure_behavior": "FAIL_SOFT_RECORD_INVOCATION",
+      "discovery_domain": "AI_AGENT",
+      "intent_terms": ["agent", "architecture", "context", "research", "automation"],
+      "intent_rules": {
+        "agent": {"domain": "AI_AGENT", "required_any": ["agent", "coding", "code", "developer", "software"]},
+        "architecture": {"domain": "AI_AGENT", "required_any": ["architecture", "codebase"]},
+        "context": {"domain": "AI_EXPERIENCE", "required_any": ["context", "prompt"]},
+        "research": {"domain": "QUANT_DATA", "required_any": ["quant", "finance", "financial", "trading", "stock", "market data"]},
+        "automation": {"domain": "PRODUCTIVITY", "required_any": ["automation", "workflow", "n8n", "browser"]}
+      },
+      "max_raw_results": 10,
+      "max_normalized_candidates": 5,
+      "max_metadata_lookups": 3,
+      "max_new_candidates": 2
+    }
+  ]
+}
