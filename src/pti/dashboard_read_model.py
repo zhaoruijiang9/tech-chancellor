@@ -48,7 +48,11 @@ ACTIVATION_PHASE_LABELS = {
 def _parse_time(value: str | None) -> str:
     if not value:
         return ""
-    return value.replace("+00:00", "Z")
+    value = value.replace("+00:00", "Z")
+    # SQLite CURRENT_TIMESTAMP is UTC but omits the zone suffix.
+    if len(value) == 19 and value[10] in {" ", "T"}:
+        return value.replace(" ", "T") + "Z"
+    return value
 
 
 def _json(value: Any, default: Any = None) -> Any:
@@ -59,7 +63,7 @@ def _json(value: Any, default: Any = None) -> Any:
 
 
 def _safe_date_sort(value: str | None) -> str:
-    return value or ""
+    return _parse_time(value)
 
 
 def _human_activity_status(value: str | None) -> str:
@@ -236,9 +240,36 @@ class DashboardReadModel:
         latest_feedback, activation_queues = load_human_library_evidence(self.db_path)
         method_adoption: dict[int, str] = {}
         source_intelligence: dict[int, dict[str, Any]] = {}
+        pipeline = {}
+        pending_cards = []
         connection = self._connection()
         if connection is not None:
             try:
+                if self._table_exists(connection, "canonical_candidates"):
+                    from .candidate_pipeline import STAGE_LABELS
+                    for candidate in connection.execute("""SELECT c.*,r.canonical_owner_repo,r.url,r.description,r.stars,r.topics,
+                        d.decision_json FROM canonical_candidates c JOIN repositories r USING(github_repository_id)
+                        LEFT JOIN chancellor_decisions d USING(github_repository_id)"""):
+                        metadata = {"stage": candidate["stage"], "stage_label": STAGE_LABELS.get(candidate["stage"], candidate["stage"]),
+                                    "source_provenance": _json(candidate["provenance_json"], []),
+                                    "final_decision": _json(candidate["decision_json"], {}).get("ACTION"),
+                                    "local_review_label": "初步语义筛选", "final_review_label": "最终 Chancellor 评审"}
+                        pipeline[int(candidate["github_repository_id"])] = metadata
+                        if not candidate["decision_json"] and candidate["stage"] in {"LOCALLY_SCREENED", "WAITING_CHANCELLOR"}:
+                            evaluation = _json(candidate["evaluation_json"], {})
+                            card = _card({**dict(candidate), "decision_json": "{}", "packet_name": "",
+                                          "imported_at": candidate["updated_at"]})
+                            card.update({"entity_kind": "SOURCE", "capability_name": candidate["description"],
+                                "human_summary": candidate["description"], "problem_solved": evaluation.get("semantic_review", {}).get("WHAT_IS_IT", ""),
+                                "best_route": evaluation.get("primary_route", "GENERAL"), "human_category": "WATCHLIST",
+                                "human_category_label": metadata["stage_label"], "lifecycle_status": metadata["stage_label"],
+                                "semantic_action": "PENDING_EXTERNAL_REVIEW", "evidence_maturity": "LOCALLY_SCREENED",
+                                "activation_state": "NOT_EVALUATED", "installed": False, "runnable": False,
+                                "requires_human_decision": False, "human_action_required": False,
+                                "classification_reason": "通过候选准入，尚无最终 Chancellor 判断。",
+                                "next_step": "等待正式 Chancellor 评审；不自动安装。",
+                                "candidate_pipeline": metadata, "updated_at": candidate["updated_at"]})
+                            pending_cards.append(card)
                 if self._table_exists(connection, "methods") and self._table_exists(connection, "method_evidence"):
                     method_rows = connection.execute("""
                         SELECT s.github_repository_id,
@@ -270,6 +301,8 @@ class DashboardReadModel:
             card["human_decision"] = human_decision
             card["method_adoption_state"] = method_adoption.get(int(row["github_repository_id"]))
             card.update(source_intelligence.get(int(row["github_repository_id"]), {}))
+            if int(row["github_repository_id"]) in pipeline:
+                card["candidate_pipeline"] = pipeline[int(row["github_repository_id"])]
             card["entity_kind"] = "SOURCE"
             card = project_human_library_item(
                 card,
@@ -280,6 +313,10 @@ class DashboardReadModel:
             card["lifecycle_status"] = card["human_category_label"]
             card["updated_at"] = card.get("evidence_timestamp") or ""
             cards.append(card)
+        cards.extend(pending_cards)
+        for card in cards:
+            for key in ("updated_at", "evidence_timestamp", "reviewed_at"):
+                card[key] = _parse_time(card.get(key))
         filters = filters or {}
         query = filters.get("q", "").strip().lower()
         state = filters.get("state", "").strip()
@@ -315,17 +352,27 @@ class DashboardReadModel:
             JOIN repositories r ON r.github_repository_id=o.github_repository_id
             ORDER BY o.observed_at DESC, o.id DESC LIMIT ?
         """, (limit,)).fetchall()
-        return [{
+        items = [{
             "type": "discovery",
             "time": row["observed_at"],
             "repository": row["canonical_owner_repo"],
             "url": row["url"],
             "summary": row["description"] or "暂无项目简介",
             "source": row["discovery_domain"] or row["source_query"],
-            "stage": LIFECYCLE_LABELS.get(row["previous_decision"] or "REVIEW", "待判断"),
+            "stage": "发现与初筛记录（尚非最终判断）",
             "priority": row["priority"],
             "decision": row["deterministic_decision"],
         } for row in rows]
+        from .candidate_pipeline import STAGE_LABELS
+        for item, row in zip(items, rows):
+            if self._table_exists(connection, "canonical_candidates"):
+                candidate = connection.execute("SELECT stage FROM canonical_candidates WHERE github_repository_id=?", (row["github_repository_id"],)).fetchone()
+                if candidate:
+                    item["stage"] = STAGE_LABELS.get(candidate[0], candidate[0])
+            final = connection.execute("SELECT decision_json FROM chancellor_decisions WHERE github_repository_id=?", (row["github_repository_id"],)).fetchone()
+            if final:
+                item["stage"] = "Chancellor 最终决定：" + _human_activity_status(_json(final[0], {}).get("ACTION"))
+        return items
 
     def _validating(self, connection: sqlite3.Connection) -> list[dict[str, Any]]:
         if not self._table_exists(connection, "activation_queue"):
@@ -353,6 +400,15 @@ class DashboardReadModel:
             return []
         try:
             events: list[dict[str, Any]] = []
+            if self._table_exists(connection, "candidate_pipeline_events"):
+                from .candidate_pipeline import STAGE_LABELS
+                for row in connection.execute("""SELECT e.*,r.canonical_owner_repo,r.url FROM candidate_pipeline_events e
+                    LEFT JOIN repositories r USING(github_repository_id) ORDER BY e.id DESC LIMIT 30"""):
+                    events.append({"type": "candidate_pipeline", "time": row["created_at"],
+                        "title": "候选准入" if row["event"] == "ADMITTED" else "候选流水线",
+                        "repository": row["canonical_owner_repo"], "url": row["url"],
+                        "status": STAGE_LABELS.get(row["event"], "准入通过" if row["event"] == "ADMITTED" else "单候选恢复"),
+                        "machine_status": row["event"], "detail": row["detail"]})
             if self._table_exists(connection, "scan_runs"):
                 for row in connection.execute("SELECT * FROM scan_runs ORDER BY started_at DESC LIMIT 20"):
                     raw_status = row["status"] or "运行中"
@@ -401,7 +457,7 @@ class DashboardReadModel:
                     status = "CAPABILITY_INVOCATION_FAILED" if not row["success"] else "USED" if row["material_use"] else "NO_MATERIAL_USE"
                     detail = (f"发现 {summary.get('raw_count', 0)} 条索引链接，规范化 {summary.get('normalized_count', 0)} 个仓库，"
                               f"新线索 {summary.get('new_count', 0)} 个，进入处理 {summary.get('selected_new_count', 0)} 个，"
-                              f"本地语义评审 {summary.get('semantic_reviewed_count', 0)} 个")
+                              f"初步语义筛选 {summary.get('semantic_reviewed_count', 0)} 个（不是最终采纳）")
                     if row["failure_code"]:
                         detail += f"；来源提醒：{row['failure_code']}"
                     if effect.get("material_rejected_reason") == "IRRELEVANT_FAMILY_HISTORY_RESULT":
@@ -411,6 +467,8 @@ class DashboardReadModel:
                                    "repository": row["canonical_name"], "url": row["url"],
                                    "status": "调用失败" if not row["success"] else "已实际使用" if row["material_use"] else "已调用，无有效新结果",
                                    "machine_status": status, "detail": detail})
+            for event in events:
+                event["time"] = _parse_time(event.get("time"))
             events.sort(key=lambda item: _safe_date_sort(item.get("time")), reverse=True)
             return events[:max(1, limit)]
         finally:
@@ -500,7 +558,7 @@ class DashboardReadModel:
             "health": health,
             "counts": {
                 "total": len(cards),
-                "reviewed_projects": len(cards),
+                "reviewed_projects": sum(card.get("semantic_action") != "PENDING_EXTERNAL_REVIEW" for card in cards),
                 "usable": sum(any(state in {"AVAILABLE", "USED"} for state in item["personal_states"]) for item in owned_capabilities),
                 "directly_usable": sum(any(state in {"AVAILABLE", "USED"} for state in item["personal_states"]) for item in owned_capabilities),
                 "used": sum("USED" in item["personal_states"] for item in owned_capabilities),

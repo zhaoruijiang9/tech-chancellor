@@ -95,6 +95,11 @@ def health_report(root: str | Path) -> dict:
     active = active_pending_count(root / "chancellor_pending")
     status = "HEALTHY"
     issues = []
+    from .candidate_pipeline import stalled_candidates
+    stalled = stalled_candidates(root)
+    if stalled:
+        status = "DEGRADED"
+        issues.append("PIPELINE_STALLED")
     if stale_locks:
         status = "NOT_EVALUATED"
         issues.append("STALE_OR_MALFORMED_LOCK")
@@ -118,7 +123,7 @@ def health_report(root: str | Path) -> dict:
         issues.append("UPSTREAM_REVIEW_NEEDS_ATTENTION")
         if status in {"HEALTHY", "DEGRADED_HISTORY_ONLY"}:
             status = "DEGRADED"
-    return {"status": status, "active_pending": active, "locks": locks, "tasks": tasks,
+    return {"status": status, "active_pending": active, "pipeline_stalled": stalled, "locks": locks, "tasks": tasks,
             "latest_scan_run": scan, "latest_stage_b_run": stage_b,
             "latest_upstream_run": upstream,
             "decision_history_count": history_count, "unique_decision_repositories": unique_history,

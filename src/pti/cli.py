@@ -59,7 +59,7 @@ def run_once(root: str | Path, config_path: str | Path, profile_path: str | Path
                                       capability_root=root, consumer_bindings=bindings)
             report = build_report(discovery.decisions, discovery.failures)
             paths = write_inbox_artifacts(root, report.high_priority + report.secondary, run_id)
-            paths.extend(write_chancellor_pending(root, report.high_priority + report.secondary, run_id))
+            paths.extend(write_chancellor_pending(root, discovery.decisions, run_id))
             report_path = write_run_report(root, report)
             status = "SCAN_NOT_EVALUATED" if discovery.failures else "SCAN_SUCCESS"
             if not report.high_priority and not report.secondary and not discovery.failures:

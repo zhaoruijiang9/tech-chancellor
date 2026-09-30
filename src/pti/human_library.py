@@ -181,6 +181,11 @@ def project_human_library_item(
         item_kind = "PROJECT"
         reason = "用户已经明确选择暂不采用。"
         next_step = "保留历史记录，不再主动推进。"
+    elif card.get("semantic_action") in {"IGNORE", "ARCHIVE"}:
+        category = "ARCHIVED" if card.get("semantic_action") == "ARCHIVE" else "NOT_ADOPTED"
+        item_kind = "PROJECT"
+        reason = "最终 Chancellor 判断不继续采用；没有安装或运行。"
+        next_step = "保留决策证据；只有出现实质新证据时重新评审。"
     elif state == "BLOCKED_HUMAN":
         category = "HUMAN_DECISION"
         item_kind = "CANDIDATE"
@@ -228,6 +233,11 @@ def project_human_library_item(
         item_kind = "PROJECT"
         reason = "现有结论明确为评审后暂不采用。"
         next_step = "保留历史记录，只有新增证据时重新评审。"
+    elif card.get("semantic_action") == "REFERENCE_ONLY":
+        category = "WATCHLIST"
+        item_kind = "KNOWLEDGE_REFERENCE"
+        reason = "最终 Chancellor 判断仅作知识参考，不代表安装、采用或可运行。"
+        next_step = "按具体任务查阅参考；不自动部署整包。"
 
     installed = state in {"TRIAL_ENABLED", "USED"}
     runnable = installed and card.get("trial_status") in {"ENABLED", "ENABLED_CONTROLLED"}

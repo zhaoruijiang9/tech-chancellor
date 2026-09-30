@@ -6,7 +6,7 @@ from .models import RepositoryRecord
 from .policy import Candidate, Evaluation, decide_candidate, score_candidate
 from .chancellor import LocalSemanticChancellor, build_review_packet
 from .storage import Database
-from .review_queue import fingerprint, material_evidence_projection, review_eligibility
+from .review_queue import fingerprint, material_evidence_projection, review_eligibility, select_source_diverse
 from .capability_invocation import active_bindings, invoke_index, relevant_to_intent
 
 
@@ -56,8 +56,10 @@ def run_discovery(config: dict[str, Any], client: Any, db: Database, capability_
                 result.failures.append({"code": "DISCOVERY_NOT_EVALUATED", "message": api_result.failure.message, "query": query})
                 continue
             for record in api_result.items:
-                hit = hits.setdefault(record.github_repository_id, {"record": record, "hits": []})
+                hit = hits.setdefault(record.github_repository_id, {"record": record, "hits": [], "provenance": []})
                 hit["hits"].append((domain, query))
+                hit["provenance"].append({"source_type": "GITHUB_RADAR", "source_id": "GITHUB_RADAR",
+                                          "scan_id": run_id, "source_query": query})
 
     invoked: list[dict[str, Any]] = []
     if run_id and capability_root is not None and consumer_bindings:
@@ -80,7 +82,15 @@ def run_discovery(config: dict[str, Any], client: Any, db: Database, capability_
                     if metadata_lookups >= min(max(int(binding.get("max_metadata_lookups", 3)), 1), 3):
                         break
                     name = item["owner_repo"]
+                    provenance = {"source_type": "CAPABILITY", "source_id": binding["implementation_id"],
+                                  "capability_id": binding["capability_id"], "implementation_id": binding["implementation_id"],
+                                  "consumer": "RADAR_DISCOVERY", "scan_id": run_id,
+                                  "index_source": "https://github.com/" + binding["implementation_id"].removeprefix("impl:"),
+                                  "source_query": f"capability:{binding['capability_id']}:{item['intent']}"}
                     if name.lower() in known_names:
+                        existing_hit = next((hit for hit in hits.values() if hit["record"].canonical_owner_repo.lower() == name.lower()), None)
+                        if existing_hit and relevant_to_intent(binding, item["intent"], item["name"], existing_hit["record"]):
+                            existing_hit["provenance"].append(provenance)
                         continue
                     owner, repository = name.split("/", 1)
                     if db.get_repository_by_name(name) is not None:
@@ -98,7 +108,8 @@ def run_discovery(config: dict[str, Any], client: Any, db: Database, capability_
                     if record.github_repository_id in hits or db.get_repository(record.github_repository_id):
                         continue
                     known_names.add(name.lower())
-                    hit = hits.setdefault(record.github_repository_id, {"record": record, "hits": []})
+                    hit = hits.setdefault(record.github_repository_id, {"record": record, "hits": [], "provenance": []})
+                    hit["provenance"].append(provenance)
                     intent_rule = (binding.get("intent_rules") or {}).get(item["intent"], {})
                     hit["hits"].append((intent_rule.get("domain", binding.get("discovery_domain", "AI_AGENT")),
                                         f"capability:{binding['capability_id']}:{item['intent']}"))
@@ -131,25 +142,20 @@ def run_discovery(config: dict[str, Any], client: Any, db: Database, capability_
         evaluation.review_reason = eligibility.reason if eligibility.reason else "OBSERVATION_CHANGED" if eligibility.observation_changed else "UNCHANGED"
         evaluation.source_query = query
         evaluation.source_group = domain
+        evaluation.source_provenance = hit["provenance"]
         prepared.append({"record": record, "evaluation": evaluation, "historical": historical,
                          "eligibility": eligibility, "hits": hit["hits"],
                          "enrichment_level": None, "enrichment_failures": []})
 
     prepared.sort(key=lambda item: (-item["evaluation"].total, -item["record"].stars,
                                     item["record"].canonical_owner_repo, item["record"].github_repository_id))
-    selected = prepared[:total_cap]
-    new_source_ids = {repository_id for invocation in invoked for repository_id in invocation["new_ids"]}
-    eligible_source = [item for item in prepared if item["record"].github_repository_id in new_source_ids
-                       and item["evaluation"].priority == "HIGH_PRIORITY"]
-    if total_cap > 0 and eligible_source and not any(item in selected for item in eligible_source):
-        selected = selected[:-1] + eligible_source[:1]
-        selected.sort(key=lambda item: (-item["evaluation"].total, -item["record"].stars,
-                                        item["record"].canonical_owner_repo, item["record"].github_repository_id))
+    rank = lambda item: (-item.total, -item.candidate.stars, item.candidate.name, item.candidate.github_repository_id)
+    selected_evaluations = select_source_diverse([item["evaluation"] for item in prepared], total_cap, rank)
+    selected = [item for evaluation in selected_evaluations for item in prepared if item["evaluation"] is evaluation]
     selected_ids = {item["record"].github_repository_id for item in selected}
     enrich_eligible = [item for item in selected if item["evaluation"].priority in {"HIGH_PRIORITY", "SECONDARY"}]
-    source_enrich = [item for item in enrich_eligible if item["record"].github_repository_id in new_source_ids][:1]
-    enrich_order = source_enrich + [item for item in enrich_eligible if item not in source_enrich]
-    enrich_ids = {item["record"].github_repository_id for item in enrich_order[:enrichment_cap]}
+    enrich_ids = {item.candidate.github_repository_id for item in
+                  select_source_diverse([item["evaluation"] for item in enrich_eligible], enrichment_cap, rank)}
     for item in selected:
         record = item["record"]
         evaluation = item["evaluation"]
@@ -160,6 +166,7 @@ def run_discovery(config: dict[str, Any], client: Any, db: Database, capability_
             evidence = client.enrich_repository(owner, repo, level=enrichment_level)
             item["enrichment_level"] = evidence.level
             item["enrichment_failures"] = evidence.failures
+            evaluation.repository_evidence = evidence.to_dict()
             evaluation.evidence.append(f"enrichment_level={evidence.level}")
             evaluation.evidence.extend(f"enrichment_failure={entry['source']}:{entry['code']}" for entry in evidence.failures)
             if evidence.readme:
@@ -181,6 +188,9 @@ def run_discovery(config: dict[str, Any], client: Any, db: Database, capability_
             evaluation.reason_code if evaluation.decision in {"IGNORE", "ARCHIVE", "REFERENCE_ONLY"} else None,
             evaluation.review_after,
         )
+        if evaluation.semantic_review:
+            from .candidate_pipeline import persist_candidate
+            persist_candidate(db, evaluation, run_id)
         result.decisions.append(evaluation)
 
     if run_id:

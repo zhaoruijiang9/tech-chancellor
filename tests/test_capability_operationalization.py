@@ -185,7 +185,9 @@ class OperationalizationTests(unittest.TestCase):
         self.assertEqual(result["status"], "SCAN_SUCCESS")
         self.assertTrue(result["capability_invocations"][0]["material_use"])
         self.assertEqual(self.db.get_activation(7)["activation_state"], "USED")
-        self.assertTrue(list((self.root / "chancellor_pending").glob("new--workflow--*.json")))
+        packets = list((self.root / "chancellor_pending").glob("9--*.json"))
+        self.assertEqual(len(packets), 1)
+        self.assertEqual(json.loads(packets[0].read_text(encoding="utf-8"))["repository_identity"]["canonical_owner_repo"], "new/workflow")
 
     def test_discovery_budget_limits_github_lookups(self):
         self.bindings[0]["max_new_candidates"] = 1
@@ -195,7 +197,7 @@ class OperationalizationTests(unittest.TestCase):
                       capability_root=self.root, consumer_bindings=self.bindings)
         self.assertEqual(client.looked_up, ["new/workflow"])
 
-    def test_new_high_priority_source_gets_one_fair_review_slot(self):
+    def test_single_review_slot_has_no_capability_source_privilege(self):
         self.db.upsert_repository(repo(8, "old/existing"))
         self.config["total_candidate_cap"] = 1
         self.config["enrichment_candidate_cap"] = 1
@@ -203,9 +205,9 @@ class OperationalizationTests(unittest.TestCase):
                         lookups={"new/workflow": repo(9, "new/workflow")})
         result = run_discovery(self.config, client, self.db, {}, "real-run",
                                capability_root=self.root, consumer_bindings=self.bindings)
-        self.assertEqual([item.candidate.github_repository_id for item in result.decisions], [9])
+        self.assertEqual([item.candidate.github_repository_id for item in result.decisions], [11])
         self.assertTrue(result.decisions[0].semantic_review)
-        self.assertEqual(result.capability_invocations[0]["selected_new_count"], 1)
+        self.assertEqual(result.capability_invocations[0]["selected_new_count"], 0)
 
     def test_irrelevant_index_result_is_not_material_use(self):
         self.bindings[0]["intent_terms"] = ["research"]

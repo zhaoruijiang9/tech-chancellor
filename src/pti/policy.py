@@ -49,6 +49,9 @@ class Evaluation:
     source_query: str = ""
     source_group: str = ""
     review_reason: str = ""
+    source_provenance: list[dict[str, Any]] = field(default_factory=list)
+    repository_evidence: dict[str, Any] = field(default_factory=dict)
+    intent_relevant: bool = True
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -76,6 +79,8 @@ class Evaluation:
             "source_query": self.source_query,
             "source_group": self.source_group,
             "review_reason": self.review_reason,
+            "source_provenance": self.source_provenance,
+            "repository_evidence": self.repository_evidence,
         }
 
 

@@ -40,6 +40,10 @@ python run.py my-capabilities
 
 ## Human Control Center
 
+Candidate handoff is independent of the display shortlist: admitted native and capability-sourced repositories share one durable Stage B queue. Repeated scans merge provenance rather than create duplicate packets. Inspect one historical candidate with `python run.py repair-stranded-candidates OWNER/REPO`; after checking that dry-run result, add `--apply` to resume only that repository. This never repeats discovery observations or installs the candidate. `python run.py stage-b OWNER/REPO --limit 1` processes only its existing official packet.
+
+Stage B's project-local model is configured in `config/stage_b.json`, with an optional `PTI_STAGE_B_MODEL` environment override. It does not change global Codex settings. Model/service failures preserve the pending packet rather than fabricate a final decision. The dashboard distinguishes preliminary evidence screening from the final Chancellor decision; `PIPELINE_STALLED` flags admitted, screened candidates older than 24 hours with neither a packet nor a final decision.
+
 After initialization, double-click `打开技术丞相.cmd` to open the local Control Center. It starts a loopback-only desktop-style browser window by default. For a normal browser window or automated checks, use `python run.py dashboard --browser` or `python run.py dashboard --no-browser`. The dashboard is read-mostly: it shows discoveries, validation, capabilities, system status, and local documents. For capabilities explicitly marked as requiring a human decision, it may record one of three bounded choices: continue isolated review, keep watching, or do not adopt. Recording a choice never installs or runs the project and never connects it to `D:\money`.
 
 ## 安全边界

@@ -68,31 +68,59 @@ def write_inbox_artifacts(root: str | Path, decisions: list[Evaluation], run_id:
     return paths
 
 
-def write_chancellor_pending(root: str | Path, decisions: list[Evaluation], run_id: str | None = None) -> list[Path]:
-    root = Path(root).resolve() / "chancellor_pending"
-    root.mkdir(parents=True, exist_ok=True)
-    paths: list[Path] = []
-    for decision in allocate_review_slots(decisions, 3):
-        if not decision.semantic_review:
+def write_chancellor_pending(root: str | Path, decisions: list[Evaluation], run_id: str | None = None,
+                             *, limit: int = 3, include_backlog: bool = True) -> list[Path]:
+    from .candidate_pipeline import (build_stage_b_packet, candidate_admission, find_existing_packet,
+                                    persist_candidate, record_handoff, restore_evaluation, review_backlog)
+    from .storage import Database
+    root = Path(root).resolve()
+    db = Database(root / "state/intelligence.db")
+    db.initialize()
+    ids = set()
+    for item in decisions:
+        if candidate_admission(item)["admitted"]:
+            persist_candidate(db, item, run_id)
+            ids.add(item.candidate.github_repository_id)
+    if include_backlog:
+        ids.update(item.candidate.github_repository_id for item in review_backlog(db))
+    candidates = []
+    paths = []
+    for repository_id in sorted(ids):
+        with db._connect() as connection:
+            row = connection.execute("SELECT * FROM canonical_candidates WHERE github_repository_id=?", (repository_id,)).fetchone()
+        if not row or row["stage"] == "CHANCELLOR_DECIDED":
             continue
-        packet_id = run_id or uuid.uuid4().hex[:10]
-        name = decision.candidate.name.replace("/", "--") + "--" + packet_id + ".json"
-        path = root / name
-        payload = {
-            "repository_identity": {"github_repository_id": decision.candidate.github_repository_id,
-                                    "canonical_owner_repo": decision.candidate.name, "url": decision.candidate.url},
-            "discovery_domain": decision.primary_route,
-            "metadata": {"description": decision.candidate.description, "stars": decision.candidate.stars},
-            "semantic_review": decision.semantic_review,
-            "deterministic_score": {"total": decision.total, "components": decision.score_components},
-            "capability_overlap_hints": decision.capability_delta,
-            "security_signals": decision.risk_flags,
-            "source_failures": [item for item in decision.evidence if item.startswith("enrichment_failure=")],
-            "status": "PENDING_CODEX_REVIEW",
-            "scan_run_id": run_id,
-            "review_reason": decision.review_reason,
-        }
-        path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        existing = find_existing_packet(root, repository_id, active_only=True)
+        if existing:
+            if row["stage"] != "WAITING_CHANCELLOR":
+                record_handoff(db, repository_id, existing.name)
+            if ".processing" not in existing.stem:
+                packet = json.loads(existing.read_text(encoding="utf-8"))
+                provenance = json.loads(row["provenance_json"])
+                if packet.get("source_provenance") != provenance:
+                    packet["source_provenance"] = provenance
+                    temporary = existing.with_suffix(".tmp")
+                    temporary.write_text(json.dumps(packet, ensure_ascii=False, indent=2), encoding="utf-8")
+                    temporary.replace(existing)
+            paths.append(existing)
+            continue
+        candidates.append((restore_evaluation(row), row))
+    selected = allocate_review_slots([item for item, _ in candidates], max(0, limit))
+    for item in selected:
+        row = next(row for value, row in candidates if value is item)
+        directory = root / "chancellor_pending"
+        directory.mkdir(parents=True, exist_ok=True)
+        name = f"{item.candidate.github_repository_id}--{row['review_fingerprint'][:16]}.json"
+        path = directory / name
+        if path.with_name(path.stem + ".processed.json").exists():
+            continue
+        payload = build_stage_b_packet(item, db, row["scan_run_id"])
+        payload["review_fingerprint"] = row["review_fingerprint"]
+        if not path.exists():
+            temporary = path.with_suffix(".tmp")
+            temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+            temporary.replace(path)
+        record_handoff(db, item.candidate.github_repository_id, path.name)
         paths.append(path)
     return paths
 

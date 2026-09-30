@@ -25,13 +25,14 @@ from pti.activation_readiness import audit_current_library, second_pilot_candida
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Manual Phase 1 technology intelligence run")
-    parser.add_argument("action", nargs="?", choices=["init", "scan", "stage-b", "activation-run", "activation-status", "activation-search", "activation-readiness", "feedback", "pending-count", "health", "build-library", "my-capabilities", "search-capabilities", "dashboard", "install-shortcut", "migrate-capabilities", "check-upstream", "review-upstream", "review-delta"], default="scan")
+    parser.add_argument("action", nargs="?", choices=["init", "scan", "stage-b", "repair-stranded-candidates", "activation-run", "activation-status", "activation-search", "activation-readiness", "feedback", "pending-count", "health", "build-library", "my-capabilities", "search-capabilities", "dashboard", "install-shortcut", "migrate-capabilities", "check-upstream", "review-upstream", "review-delta"], default="scan")
     parser.add_argument("repo", nargs="?")
     parser.add_argument("label", nargs="?")
     parser.add_argument("note", nargs="?", default="")
     parser.add_argument("--config", default="config/discovery.json")
     parser.add_argument("--capability-profile", default="config/local_capability_profile.json")
     parser.add_argument("--dry-run", action="store_true", default=True)
+    parser.add_argument("--apply", action="store_true", help="apply a bounded single-candidate repair after dry-run inspection")
     parser.add_argument("--problem", default="")
     parser.add_argument("--task-context", default="")
     parser.add_argument("--project-context", default="")
@@ -51,6 +52,17 @@ def main() -> int:
     parser.add_argument("--review-evidence", default="")
     args = parser.parse_args()
     root = Path(__file__).parent
+    if args.action == "repair-stranded-candidates":
+        if not args.repo:
+            parser.error("repair-stranded-candidates requires one canonical repository name")
+        from pti.candidate_pipeline import repair_stranded_candidates, stranded_candidate_summary
+        from pti.github_api import GitHubClient, RequestBudget
+        Database(root / "state/intelligence.db").initialize()
+        result = repair_stranded_candidates(root, args.repo, dry_run=not args.apply,
+                    client=GitHubClient(budget=RequestBudget(4)) if args.apply else None)
+        result["remaining_stranded"] = stranded_candidate_summary(root)["count"]
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0 if result["status"] in {"REPAIR_READY", "REPAIR_NEEDS_EVIDENCE_REFRESH", "RESUMED", "ALREADY_PENDING", "ALREADY_DECIDED"} else 1
     if args.action == "activation-readiness":
         db = Database(root / "state" / "intelligence.db")
         db.initialize()
@@ -136,7 +148,7 @@ def main() -> int:
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0
     if args.action == "stage-b":
-        result = run_stage_b(root)
+        result = run_stage_b(root, limit=args.limit, repository=args.repo)
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0 if result["status"] in {"CHANCELLOR_SUCCESS", "CHANCELLOR_SUCCESS_NO_PENDING"} else 1
     if args.action == "feedback":

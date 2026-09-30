@@ -156,6 +156,20 @@ class Database:
                 category TEXT NOT NULL, blocker TEXT NOT NULL,
                 audited_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )""")
+            connection.execute("""CREATE TABLE IF NOT EXISTS canonical_candidates (
+                github_repository_id INTEGER PRIMARY KEY,
+                scan_run_id TEXT, evaluation_json TEXT NOT NULL,
+                provenance_json TEXT NOT NULL DEFAULT '[]',
+                admission_json TEXT NOT NULL, review_fingerprint TEXT NOT NULL,
+                stage TEXT NOT NULL, packet_name TEXT, screened_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )""")
+            connection.execute("""CREATE TABLE IF NOT EXISTS candidate_pipeline_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                github_repository_id INTEGER NOT NULL, event TEXT NOT NULL,
+                reference TEXT NOT NULL, detail TEXT NOT NULL, created_at TEXT NOT NULL,
+                UNIQUE(github_repository_id,event,reference)
+            )""")
             queue_columns = {row[1] for row in connection.execute("PRAGMA table_info(activation_queue)")}
             for name, definition in {
                 "phase": "TEXT NOT NULL DEFAULT 'QUEUED'",
@@ -488,6 +502,11 @@ class Database:
                 (repository_id, scan_run_id, json.dumps(decision, ensure_ascii=False, sort_keys=True), packet_name))
             connection.execute("UPDATE repositories SET previous_decision = ?, previous_routes = ? WHERE github_repository_id = ?",
                                (decision["ACTION"], json.dumps([decision["BEST_ROUTE"]]), repository_id))
+            connection.execute("""UPDATE canonical_candidates SET stage='CHANCELLOR_DECIDED',updated_at=?
+                WHERE github_repository_id=?""", (utc_now(), repository_id))
+            connection.execute("""INSERT OR IGNORE INTO candidate_pipeline_events
+                (github_repository_id,event,reference,detail,created_at) VALUES (?,?,?,?,?)""",
+                (repository_id, "CHANCELLOR_DECIDED", packet_name, decision["ACTION"], utc_now()))
 
     def latest_chancellor_history(self, repository_id: int) -> dict | None:
         with self._connect() as connection:

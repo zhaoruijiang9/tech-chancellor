@@ -17,7 +17,7 @@ function chip(value, label) { return '<span class="status-chip ' + statusClass(v
 function tag(label, cls) { return '<span class="tag ' + (cls || '') + '">' + esc(label) + '</span>'; }
 function getJSON(url) { return fetch(url, {cache:'no-store'}).then(function (response) { if (!response.ok) throw new Error(response.statusText); return response.json(); }); }
 function postJSON(url, payload) { return fetch(url, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}).then(function (response) { return response.json().then(function (body) { if (!response.ok) throw new Error(body.error || response.statusText); return body; }); }); }
-function issueLabel(value) { if (String(value).indexOf('UPSTREAM_CHECK_') === 0) return '上游变化监测未完成'; return {'UPSTREAM_REVIEW_NEEDS_ATTENTION':'上游增量复审需要检查','ACTIVE_PENDING_PACKETS':'Chancellor 尚有待重试项目','TASK_LAST_RESULT_NONZERO':'计划任务上次未完整结束','STALE_OR_MALFORMED_LOCK':'后台锁需要检查','INCOMPLETE_SCAN_RUN':'存在未完成扫描记录'}[value] || humanStatus(value); }
+function issueLabel(value) { if (value === 'PIPELINE_STALLED') return '候选评审交接停滞'; if (String(value).indexOf('UPSTREAM_CHECK_') === 0) return '上游变化监测未完成'; return {'UPSTREAM_REVIEW_NEEDS_ATTENTION':'上游增量复审需要检查','ACTIVE_PENDING_PACKETS':'Chancellor 尚有待重试项目','TASK_LAST_RESULT_NONZERO':'计划任务上次未完整结束','STALE_OR_MALFORMED_LOCK':'后台锁需要检查','INCOMPLETE_SCAN_RUN':'存在未完成扫描记录'}[value] || humanStatus(value); }
 function issueDetail(value) { if (String(value).indexOf('UPSTREAM_CHECK_') === 0) return value.indexOf('RATE_LIMIT') >= 0 ? 'GitHub API 配额不足，本轮监测未完成；不会把失败误判为无更新。' : value.indexOf('NETWORK') >= 0 ? '网络请求失败，本轮监测未完成；下次运行会重试。' : '上游监测遇到异常，已有指纹与判断不会被覆盖。'; return {'UPSTREAM_REVIEW_NEEDS_ATTENTION':'有变化已排队，但自动复审多次未完成；旧判断仍标记为待复审。','ACTIVE_PENDING_PACKETS':'这是后台判断队列，不需要你手动处理；Chancellor 会在下次运行继续尝试。','TASK_LAST_RESULT_NONZERO':'上次后台判断未完整结束，证据已保留；若后续运行恢复正常，无需你操作。','STALE_OR_MALFORMED_LOCK':'后台锁可能需要检查，系统不会在锁状态不明时继续写入。','INCOMPLETE_SCAN_RUN':'最近一次扫描没有形成完整结论，不能据此判断为没有项目。'}[value] || '该提醒来自已有健康检查，不影响能力库读取。'; }
 function formLabel(item) { return item.capability_id ? '能力' : item.method_id ? '方法' : item.item_kind === 'METHOD_SOURCE' ? '方法来源' : item.entity_kind === 'SOURCE' ? '来源项目' : item.item_kind === 'CANDIDATE' ? '候选项目' : item.item_kind === 'PROJECT' ? '项目' : '知识参考'; }
 function primaryStatusLabel(item) { return item.human_category_label || humanStatus(item.human_category) || item.lifecycle_status || humanStatus(item.activation_state); }
@@ -99,7 +99,7 @@ function operationInsight(item) {
   var readiness = item.activation_readiness || {}; var usage = item.capability_usage || {};
   if (!readiness.category && !usage.consumer) return '';
   var health = usage.health || {}; var result = usage.last_material_summary || {};
-  var useText = usage.last_material_use_at ? '新增 ' + (result.new_count || 0) + ' 个候选，语义评审 ' + (result.semantic_reviewed_count || 0) + ' 个' : '尚无有效生产使用';
+  var useText = usage.last_material_use_at ? '新增 ' + (result.new_count || 0) + ' 个候选，初步语义筛选 ' + (result.semantic_reviewed_count || 0) + ' 个；不代表最终采用' : '尚无有效生产使用';
   return '<section class="surface history-panel"><div class="section-head"><div><h2>调用与阻断</h2></div></div><dl class="clean-list">' +
     '<div><dt>激活准备度</dt><dd>' + esc(READINESS_LABELS[readiness.category] || readiness.category || (item.activation_state === 'USED' ? '已实际使用' : '尚未审计')) + '</dd></div>' +
     (readiness.blocker ? '<div><dt>当前阻断</dt><dd>' + esc(readiness.blocker) + '</dd></div>' : '') +
@@ -107,6 +107,19 @@ function operationInsight(item) {
     '<div><dt>最近真实使用</dt><dd>' + esc(usage.last_material_use_at ? date(usage.last_material_use_at) : '尚无') + '</dd></div>' +
     '<div><dt>使用结果</dt><dd>' + esc(useText) + '</dd></div>' +
     '<div><dt>调用健康</dt><dd>' + esc(health.consecutive_failures ? '连续失败 ' + health.consecutive_failures + ' 次' : usage.consumer ? '正常' : '尚无调用') + '</dd></div></dl></section>';
+}
+
+function candidatePipelineInsight(item) {
+  var pipeline = item.candidate_pipeline;
+  if (!pipeline) return '';
+  var sources = (pipeline.source_provenance || []).map(function (source) {
+    return source.source_type === 'CAPABILITY' ? 'Skill 生态发现 · ' + (source.implementation_id || source.source_id) : 'GitHub Radar';
+  }).filter(function (value, index, values) { return values.indexOf(value) === index; }).join('；');
+  return '<section class="surface history-panel"><div class="section-head"><h2>候选处理进度</h2></div><dl class="clean-list">' +
+    '<div><dt>来源</dt><dd>' + esc(sources || '历史来源待核对') + '</dd></div>' +
+    '<div><dt>当前阶段</dt><dd>' + esc(pipeline.stage_label) + '</dd></div>' +
+    '<div><dt>初步语义筛选</dt><dd>已完成，只作为证据与排序参考</dd></div>' +
+    '<div><dt>最终 Chancellor 决定</dt><dd>' + esc(pipeline.final_decision ? humanStatus(pipeline.final_decision) : '尚未作出') + '</dd></div></dl></section>';
 }
 
 function renderEntityDetail(item) {
@@ -130,7 +143,7 @@ function renderCapabilityDetail(item) {
   document.querySelector('#current-view-label').textContent = '能力详情';
   app.innerHTML = '<div class="breadcrumb"><a href="#capabilities">能力库</a><span>›</span><strong>' + esc(displayName(item.repository)) + '</strong></div><section class="detail-hero"><div class="detail-identity"><span class="detail-monogram">' + esc(displayName(item.repository).charAt(0).toUpperCase()) + '</span><div><span class="kicker">' + esc(category(item.best_route)) + '</span><h1>' + esc(displayName(item.repository)) + '</h1><p>' + esc(item.repository) + '</p></div></div><div class="detail-status">' + chip(item.human_category || item.activation_state, primaryStatusLabel(item)) + '<span>更新于 ' + esc(date(item.updated_at)) + '</span></div></section><div class="detail-layout"><div class="detail-main"><section class="detail-section"><span class="section-label">这是什么</span><h2>' + esc(item.human_summary || item.capability_name) + '</h2><p class="detail-copy">' + esc(item.problem_solved || '') + '</p></section><section class="detail-section"><span class="section-label">为什么在这里</span><p class="detail-copy">' + esc(collectionReason(item)) + '</p><div class="next-step"><strong>下一步</strong><span>' + esc(item.next_step || '等待新的证据。') + '</span></div></section>' + decisionPanel(item) + '<section class="detail-section"><span class="section-label">什么时候该用</span>' + bulletList(item.when_to_use, '当前没有额外的适用场景说明。') + '</section><section class="codex-callout"><div><span class="section-label">' + (item.human_category === 'USED' || item.human_category === 'USABLE' || item.human_category === 'ADOPTED_METHOD' ? '让 Codex 使用' : '与 Codex 讨论') + '</span><p>' + esc(ask) + '</p></div><button class="copy-button" data-copy="' + esc(ask) + '">复制调用语句</button></section><section class="detail-section"><span class="section-label">限制与边界</span>' + bulletList(item.main_limitations, '当前没有额外限制说明。') + '</section></div><aside class="detail-aside"><section class="aside-card"><span class="section-label">当前状态</span><h3>' + esc(primaryStatusLabel(item)) + '</h3><dl><div><dt>条目类型</dt><dd>' + esc(formLabel(item)) + '</dd></div><div><dt>已经安装</dt><dd>' + (item.installed ? '是' : '否') + '</dd></div><div><dt>当前可运行</dt><dd>' + (item.runnable ? '是' : '否') + '</dd></div><div><dt>证据成熟度</dt><dd>' + esc(humanStatus(item.evidence_maturity)) + '</dd></div></dl></section><section class="aside-card"><span class="section-label">来源</span><a class="source-link" href="' + esc(item.url || '#') + '" target="_blank" rel="noreferrer"><strong>GitHub 仓库</strong><span>' + esc(item.repository) + '</span><b>↗</b></a></section></aside></div><section class="surface history-panel"><div class="section-head"><div><h2>过去发生了什么</h2><p>与这项能力相关的本地判断记录</p></div></div><div class="history-list">' + (eventHtml || quietState('暂无单独动态','当前状态来自能力库记录；后续判断会按时间排列在这里。')) + '</div></section><details class="technical-details"><summary>查看技术字段</summary><dl><div><dt>human_category</dt><dd>' + esc(item.human_category) + '</dd></div><div><dt>activation_state</dt><dd>' + esc(item.activation_state) + '</dd></div><div><dt>activation_tier</dt><dd>' + esc(item.activation_tier) + '</dd></div><div><dt>semantic_action</dt><dd>' + esc(item.semantic_action) + '</dd></div></dl></details>';
   app.insertAdjacentHTML('beforeend', sourceInsight(item));
-  app.insertAdjacentHTML('beforeend', operationInsight(item));
+  app.insertAdjacentHTML('beforeend', candidatePipelineInsight(item) + operationInsight(item));
   restartViewEntrance();
 }
 

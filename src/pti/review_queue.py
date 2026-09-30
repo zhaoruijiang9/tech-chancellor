@@ -57,8 +57,29 @@ def should_enqueue(reason: str | None, existing_reason: str | None = None) -> bo
 def allocate_review_slots(evaluations: list[Any], limit: int = 3) -> list[Any]:
     eligible = [item for item in evaluations if getattr(item, "review_reason", "") in REVIEW_REASONS
                 and getattr(item, "semantic_review", None)]
-    return sorted(eligible, key=lambda item: (
+    return select_source_diverse(eligible, limit, lambda item: (
         0 if item.review_reason == "USER_REQUESTED" else 1,
         -int(getattr(item, "total", 0)),
         -int(getattr(item.candidate, "current_need", 0)),
-        getattr(item.candidate, "name", "")))[:max(0, limit)]
+        getattr(item.candidate, "name", "")))
+
+
+def select_source_diverse(items: list[Any], limit: int, rank_key) -> list[Any]:
+    """Reserve at most one extra source representation after the best ranked item."""
+    ordered = sorted(items, key=rank_key)
+    selected = ordered[:max(0, limit)]
+    if limit < 2 or not selected:
+        return selected
+
+    def sources(item):
+        provenance = getattr(item, "source_provenance", [])
+        return {entry.get("source_id", entry.get("source_type", "GITHUB_RADAR")) for entry in provenance} or {"GITHUB_RADAR"}
+
+    represented = set().union(*(sources(item) for item in selected))
+    for item in ordered:
+        if (item not in selected and not sources(item).intersection(represented)
+                and item.priority == "HIGH_PRIORITY" and item.total >= 35
+                and item.candidate.security_risk < 4 and getattr(item, "intent_relevant", True)):
+            selected[-1] = item
+            break
+    return sorted(selected, key=rank_key)
