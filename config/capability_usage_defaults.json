@@ -1,0 +1,32 @@
+{
+  "tt-a1i/archify": {
+    "human_summary": "生成可交互的架构图、数据流图、时序图或前后对比视图。",
+    "when_to_use": ["理解陌生项目", "解释关键调用链", "比较架构变化"],
+    "how_to_ask_codex": ["在当前任务授权的项目中分析架构并给出可核验的图。"],
+    "expected_outputs": ["架构视图", "结构化证据"],
+    "user_entrypoint": "先核对本机安装、验证和授权状态，再使用对应入口。",
+    "automatic_use_policy": "通用使用说明不代表已经安装、启用或获得授权。",
+    "main_limitations": ["受保护项目要求任务限定的只读授权。"]
+  },
+  "ComposioHQ/awesome-claude-skills": {
+    "human_summary": "Skill 生态索引，可为候选发现提供来源链接。",
+    "when_to_use": ["发现可能缺少的能力", "比较 skill 分类"],
+    "how_to_ask_codex": ["检索相关来源，再核验增量价值、安全性与重复度。"],
+    "expected_outputs": ["候选链接", "评审证据"],
+    "user_entrypoint": "完成本机验证后使用 activation-search。",
+    "automatic_use_policy": "仅受支持的只读路径；不会安装索引中的第三方 skill。",
+    "main_limitations": ["索引条目本身未经独立审核。"]
+  },
+  "bmad-code-org/BMAD-METHOD": {"human_summary": "结构化需求澄清、规划、实施和验证的方法参考。"},
+  "github/spec-kit": {"human_summary": "规格先行、决策追踪和验收门槛的方法参考。"},
+  "cased/kit": {"human_summary": "代码库结构、符号和上下文映射的方案参考。"},
+  "chunkhound/chunkhound": {"human_summary": "跨文件语义检索与上下文组织的方案参考。"},
+  "gmickel/flow-next": {"human_summary": "多阶段 agent 工作流编排的方案参考。"},
+  "headroomlabs-ai/headroom": {"human_summary": "工具输出与 agent 上下文压缩的研究参考。"},
+  "FoundationAgents/MetaGPT": {"human_summary": "多 agent 软件协作架构的研究参考。"},
+  "langchain-ai/langchain": {"human_summary": "LLM 应用与 agent 编排生态的参考资料。"},
+  "volcengine/MineContext": {"human_summary": "桌面上下文采集与检索的研究参考。"},
+  "TauricResearch/TradingAgents": {"human_summary": "金融多 agent 研究框架，不代表交易授权或盈利能力。"},
+  "coleam00/archon": {"human_summary": "Agent workflow 编排和验证门的研究参考。"},
+  "nieledran/backtesting-engine": {"human_summary": "公开或合成数据上的量化回测研究参考；采用授权必须来自当前用户的决策。"}
+}

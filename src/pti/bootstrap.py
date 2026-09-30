@@ -13,6 +13,7 @@ RUNTIME_DIRECTORIES = (
     "library/generated",
     "quarantine",
     "user_artifacts",
+    "managed_capabilities",
 )
 
 
@@ -21,6 +22,10 @@ def initialize_project(root: str | Path, config_path: str | Path, profile_path: 
     root = Path(root).resolve()
     config_path = Path(config_path).resolve()
     profile_path = Path(profile_path).resolve()
+    template = root / "config/local_capability_profile.example.json"
+    if not profile_path.exists() and template.is_file():
+        profile_path.parent.mkdir(parents=True, exist_ok=True)
+        profile_path.write_text(template.read_text(encoding="utf-8"), encoding="utf-8")
     if not config_path.is_file():
         raise FileNotFoundError(f"discovery config not found: {config_path}")
     if not profile_path.is_file():

@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from .models import EnrichmentEvidence, RepositoryRecord, utc_now
+from . import __version__
 
 
 class HttpFailure(Exception):
@@ -58,7 +59,7 @@ class UrllibTransport:
         url = "https://api.github.com" + path
         if params:
             url += "?" + urllib.parse.urlencode(params)
-        headers = {"Accept": "application/vnd.github+json", "User-Agent": "personal-tech-intelligence/0.1"}
+        headers = {"Accept": "application/vnd.github+json", "User-Agent": "TechChancellor/" + __version__}
         token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
         if token:
             headers["Authorization"] = f"Bearer {token}"

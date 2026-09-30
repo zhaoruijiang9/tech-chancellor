@@ -14,7 +14,7 @@ READINESS_CATEGORIES = {
 }
 
 
-def audit_current_library(db, classifications: dict[str, dict]) -> dict:
+def audit_current_library(db, classifications: dict[str, dict] | None = None) -> dict:
     with db._connect() as connection:
         rows = connection.execute("""SELECT i.implementation_id,s.canonical_name,
             COALESCE(a.activation_state,'') activation_state
@@ -24,6 +24,9 @@ def audit_current_library(db, classifications: dict[str, dict]) -> dict:
                               AND p.subject_id=i.implementation_id AND p.state='USED')
             ORDER BY i.implementation_id""").fetchall()
         active_ids = {row["implementation_id"] for row in rows}
+        if classifications is None:
+            classifications = {row["implementation_id"]: dict(row) for row in
+                               connection.execute("SELECT * FROM activation_readiness")}
         for stale in connection.execute("SELECT implementation_id FROM activation_readiness").fetchall():
             if stale[0] not in active_ids:
                 connection.execute("DELETE FROM activation_readiness WHERE implementation_id=?", (stale[0],))

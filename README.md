@@ -1,67 +1,80 @@
 # TechChancellor
 
-**A personal technical intelligence and capability activation system for AI-assisted development.**
+**Know what your AI can already do, what it is missing, and safely discover, verify, activate and reuse new capabilities.**
 
-技术丞相（TechChancellor）自动发现、判断、验证并激活与你有关的技术能力，让 Codex 在未来项目中直接复用。它由内部项目名 Personal Tech Intelligence（PTI）演化而来。
+TechChancellor is a local capability control center, not another GitHub bookmark list or an automatic installer. It keeps evidence for what was reviewed, what is usable, and what has actually been used.
 
-## 它解决什么问题
+[中文](README.zh-CN.md) · [Quick Start](#quick-start-windows) · [User Guide](docs/USAGE.md) · [Release Notes](docs/releases/v0.2.0.md)
 
-技术变化很快，GitHub 项目很多，star 不等于适合你，Agent 也会重复搜索。真正缺少的是长期能力积累，以及可审计、安全的采用过程。
+![TechChancellor Control Center, clean installation](docs/images/control-center.jpg)
 
-## 核心链路
+## The Loop
 
-`Discover` → `Normalize` → `Review` → `Capability Library` → `Verify` → `Activate` → `Reuse`
+**Discover → Understand → Verify → Activate → Reuse → Keep Fresh**
 
-- **Radar**：从公开 GitHub 来源发现候选项目。
-- **Chancellor**：补充证据并做语义判断。
-- **能力库**：保存可检索的能力卡和限制。
-- **安全策略**：固定版本、隔离检查、可回滚；敏感能力必须人工批准。
-- **用户工具箱**：生成 `MY_CAPABILITIES.md`，供 Codex 在明确任务中复用。
+Radar finds public projects. Chancellor judges incremental value against your existing capabilities. Supported low-risk paths can be validated and made available; production consumers record real use. Newly discovered candidates return to the same final-review pipeline.
 
-## 快速开始（Windows）
+A **source** is where evidence comes from; an **implementation** is one way to deliver it; a **capability** is what you can do. One repository may provide several capabilities, and several repositories may implement the same capability. A bookmark is not proof of ownership or usefulness.
 
-需要 Python 3.11+、Git；网络扫描使用公开 GitHub REST API。项目运行时使用 Python 标准库，不要求第三方包安装。进入项目根目录后，先初始化一次本地运行目录和 SQLite 数据库：
+## Quick Start (Windows)
+
+Requires Python 3.11+ and Git. Python runtime dependencies are standard-library only. Codex CLI, authenticated GitHub reads, and scheduled tasks are optional.
 
 ```powershell
-$env:PYTHONUTF8 = "1"
-$env:PYTHONPATH = "$PWD\src"
-python run.py init
-python run.py health
-python run.py scan --dry-run
-python run.py build-library
-python run.py my-capabilities
+git clone https://github.com/zhaoruijiang9/tech-chancellor.git
+cd tech-chancellor
+python -m venv .venv
+.venv\Scripts\python.exe -m pip install -r requirements.txt
+.venv\Scripts\python.exe run.py init
+.venv\Scripts\python.exe run.py health
+.venv\Scripts\python.exe run.py dashboard --browser
 ```
 
-如果希望隔离 Python 环境，可先运行 `python -m venv .venv`，再用 `.venv\Scripts\python.exe` 替换上面的 `python`；项目没有需要联网安装的第三方 Python 依赖。首次使用请先运行 `python run.py my-capabilities` 生成本机能力清单，再阅读 `MY_CAPABILITIES.md` 和 `docs/CURRENT_PROJECT_STATE.md`。Windows 计划任务是可选部署步骤，不会由基础命令偷偷创建。
+The default launcher is `打开技术丞相.cmd`; it opens a desktop-style local browser window. `init` is repeatable, preserves existing local choices, and does not install capabilities or scheduled tasks. A fresh installation starts with zero reviewed sources and zero personal capabilities.
 
-`init` 是幂等操作，可安全重复运行。`scan` 默认是公开 GitHub 数据的手动 dry-run；Codex 语义审查和 Windows 计划任务均为可选的后续配置，不会在初始化时自动启用。
+For the first bounded, public-read-only discovery, in a second terminal:
 
-受控能力验证可手动运行 `python run.py activation-run`，用 `python run.py activation-status` 查看阶段与阻断原因。已启用的只读索引可用 `python run.py activation-search pdf` 查询；检索结果只是未经独立审核的第三方链接，不会安装其中的 skill。定时 Chancellor 脚本会在语义审查结束后单独调用 activation worker，也可独立调度 `run_scheduled_activation.ps1`。需要执行第三方代码、访问凭据或启动服务的候选不会因此自动运行。
+```powershell
+.venv\Scripts\python.exe run.py scan --config config/discovery.quickstart.json --dry-run
+.venv\Scripts\python.exe run.py build-library
+.venv\Scripts\python.exe run.py my-capabilities
+```
 
-## Human Control Center
+Anonymous GitHub API limits may produce an explicit degraded result; the base dashboard remains usable. This scan does not invoke Codex, install a project, or execute third-party code.
 
-Candidate handoff is independent of the display shortlist: admitted native and capability-sourced repositories share one durable Stage B queue. Repeated scans merge provenance rather than create duplicate packets. Inspect one historical candidate with `python run.py repair-stranded-candidates OWNER/REPO`; after checking that dry-run result, add `--apply` to resume only that repository. This never repeats discovery observations or installs the candidate. `python run.py stage-b OWNER/REPO --limit 1` processes only its existing official packet.
+## A Real Workflow
 
-Stage B's project-local model is configured in `config/stage_b.json`, with an optional `PTI_STAGE_B_MODEL` environment override. It does not change global Codex settings. Model/service failures preserve the pending packet rather than fabricate a final decision. The dashboard distinguishes preliminary evidence screening from the final Chancellor decision; `PIPELINE_STALLED` flags admitted, screened candidates older than 24 hours with neither a packet nor a final decision.
+The read-only index from [awesome-claude-skills](https://github.com/ComposioHQ/awesome-claude-skills) was pinned, quarantined, statically reviewed, rollback-tested and functionally evaluated. Its Skill Ecosystem Discovery capability became AVAILABLE, then a real Radar consumer invocation supplied the evidence for USED.
 
-After initialization, double-click `打开技术丞相.cmd` to open the local Control Center. It starts a loopback-only desktop-style browser window by default. For a normal browser window or automated checks, use `python run.py dashboard --browser` or `python run.py dashboard --no-browser`. The dashboard is read-mostly: it shows discoveries, validation, capabilities, system status, and local documents. For capabilities explicitly marked as requiring a human decision, it may record one of three bounded choices: continue isolated review, keep watching, or do not adopt. Recording a choice never installs or runs the project and never connects it to `D:\money`.
+It discovered [context-engineering-kit](https://github.com/NeoLabHQ/context-engineering-kit). Bounded README evidence passed canonical admission and reached the formal Chancellor. The actual final decision was **REFERENCE_ONLY**: substantial overlap, no demonstrated incremental benefit. The candidate was not installed or executed.
 
-## 安全边界
+The outcome illustrates the product: useful discovery does not have to end in unnecessary installation. This example describes a verified workflow; it is not seeded into new installations.
 
-TechChancellor 采用 **SAFE_BY_CONTAINMENT**：不自动全局安装、不自动连接账户、不自动下单；第三方能力必须固定版本并经过隔离/静态检查。受保护项目默认拒绝访问，只有当前任务提供路径、目的和只读范围明确的授权时，受控 wrapper 才可读取架构信息，输出必须在目标项目之外。
+## Safety and Limits
 
-## Release Status
+**SAFE_BY_CONTAINMENT:** automatic paths must be low-risk, bounded, reversible and supported by an existing adapter. Local preliminary screening and final Chancellor review are separate stages.
 
-`v0.1.0` is an early public release and personal developer tool, licensed under Apache-2.0. It does not claim enterprise readiness, full autonomy, or a stable API guarantee. The repository does not include personal runtime databases, logs, trading data, or `D:\项目架构图` artifacts.
+v0.2.0 does **not** automatically execute arbitrary third-party Python, Node, CLI or MCP services. A secure third-party execution sandbox remains a missing platform capability. Credentials, privileged operations, services, financial accounts and protected projects require appropriate human boundaries.
 
-License: [Apache-2.0](LICENSE)
+Runtime SQLite, approvals, installed versions, pointers, usage receipts, caches and personal reports stay local and are not release defaults. Generic guidance is public; `CONFIG != STATE`.
 
-## Feedback and Contact
+## Optional Components
 
-If you use TechChancellor, feedback on bugs, user experience, capability recommendations, and product design is welcome.
+- Codex CLI: required for formal Stage B and semantic delta review, not for initialization or the dashboard. Model priority: `PTI_STAGE_B_MODEL` → ignored `config/stage_b.local.json` → legacy ignored `config/stage_b.json` → Codex CLI default. See [configuration](docs/USAGE.md#codex-and-models).
+- GitHub authentication: optional higher public API limits through process environment `GH_TOKEN` or `GITHUB_TOKEN`; never commit a credential.
+- Windows Scheduler: explicit opt-in deployment, not an installation requirement. See [scheduling](docs/USAGE.md#scheduling).
+- Obsidian: optional Markdown reader; the Control Center includes its own document view.
 
-- Bugs and feature ideas: GitHub Issues
-- Public discussion: [GitHub Discussions](https://github.com/zhaoruijiang9/tech-chancellor/discussions)
-- Private contact: `2565455406@qq.com`
+## Upgrade from v0.1.0
 
-Useful feedback includes which discoveries are valuable or noisy, which capabilities deserve activation, whether activation boundaries are too conservative or aggressive, installation difficulties, Codex retrieval usefulness, and Windows/Codex compatibility issues.
+Stop your local background runs, back up `state/` and any local config/install directories outside the checkout, then update and run `python run.py init`. Schema initialization is idempotent and preserves valid historical records. Do not delete the database. See [upgrade precautions](docs/USAGE.md#upgrade).
+
+## Feedback
+
+Bugs, useful/noisy discoveries, capability recommendations, installation problems and safety-boundary feedback are welcome.
+
+- [GitHub Issues](https://github.com/zhaoruijiang9/tech-chancellor/issues)
+- [GitHub Discussions](https://github.com/zhaoruijiang9/tech-chancellor/discussions)
+- Private contact: **2565455406@qq.com**
+
+[Apache-2.0](LICENSE). v0.2.0 is an early developer tool, not an enterprise-readiness or profitability claim. [Changelog](CHANGELOG.md) · [Contributing](CONTRIBUTING.md) · [Documentation](docs/README.md)

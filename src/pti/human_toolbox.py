@@ -18,8 +18,8 @@ STATUS_LABELS = {
 
 
 def _usage(root: Path) -> dict[str, dict[str, Any]]:
-    path = root / "config" / "human_capability_usage.json"
-    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    from .local_config import load_usage
+    return load_usage(root)
 
 
 def _with_usage(root: Path, card: dict[str, Any]) -> dict[str, Any]:

@@ -75,7 +75,7 @@ SPECIAL_CANDIDATES = {
     },
     "nieledran/backtesting-engine": {
         "reason": "用户已允许后续隔离评估；当前仍未安装，需先验证依赖、凭据边界、回滚和相对增量。",
-        "next_step": "系统后续仅在公开或合成数据环境中继续审查，不接入 broker、账户或 D:\\money。",
+        "next_step": "系统后续仅在公开或合成数据环境中继续审查，不接入 broker、账户或受保护项目。",
     },
 }
 

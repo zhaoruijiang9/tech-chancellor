@@ -1,15 +1,7 @@
-# PTI Git Policy Override
+# Repository Git Policy
 
-This repository is the first confirmed pilot of `PERSONAL_CODEX_GIT_POLICY_V0.1`.
+Use precise staging and preserve unrelated user changes. Runtime databases, installed capabilities, user choices, audit receipts, caches and generated personal projections remain local.
 
-```text
-REPOSITORY_CLASS = PERSONAL
-AUTO_COMMIT = YES
-AUTO_PUSH = NO
-```
+Local commits are allowed when requested by the active task. Remote push and release creation require explicit task-scoped authorization. After a release, automatic push returns to **NO_BY_DEFAULT**. Never force push, rewrite public history or move an existing release tag without separate authorization.
 
-The repository-local Git identity is the user's confirmed GitHub noreply identity. PTI runtime state, downloaded source archives, quarantine evidence, dependency trees, and generated outputs remain local unless a future project decision explicitly promotes a reproducible artifact into source control.
-
-The approved public project contact is `2565455406@qq.com`. It is intentionally separate from Git author identity. The current exact GitHub noreply address for the new account is not reliably available, so future identity cleanup remains pending and no address is guessed.
-
-This override records PTI-specific facts only. The full behavior is inherited from the user-level policy at `C:\Users\25654\.codex\policies\development-policy.md`.
+Public contact is separate from Git author identity. Prefer a verified GitHub noreply author address; do not infer an author address from the public contact mailbox.

@@ -1,0 +1,11 @@
+{
+  "request_budget": 3,
+  "enrichment_level": "LIGHT",
+  "enrichment_candidate_cap": 1,
+  "per_query_cap": 2,
+  "total_candidate_cap": 2,
+  "cooldown_days": 14,
+  "lookback_days": 45,
+  "report_limits": {"high_priority": 5, "secondary": 10},
+  "query_groups": [{"domain": "AI_AGENT", "queries": ["context engineering language:python"]}]
+}

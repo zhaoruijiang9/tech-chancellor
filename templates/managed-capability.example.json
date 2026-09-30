@@ -1,0 +1,10 @@
+{
+  "capability": "EXAMPLE_CAPABILITY",
+  "repository": "example/project",
+  "pinned_commit": null,
+  "enabled": false,
+  "activation_state": "NOT_INSTALLED",
+  "availability": "NOT_AVAILABLE",
+  "auto_update": false,
+  "credential_use": false
+}

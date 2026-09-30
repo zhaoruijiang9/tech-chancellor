@@ -1,3 +1,3 @@
-"""Personal technology intelligence Phase 1 MVP."""
+"""TechChancellor personal technical intelligence."""
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"

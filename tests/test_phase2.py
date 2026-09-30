@@ -35,7 +35,7 @@ class Phase2Tests(unittest.TestCase):
     def test_static_analysis_flags_executable_credentials_and_protected_path(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            (root / "unsafe.py").write_text('import os\ntoken=os.getenv("API_KEY")\npath="D:\\money"', encoding="utf-8")
+            (root / "unsafe.py").write_text('import os\ntoken=os.getenv("API_KEY")\npath="D:\\protected-project"', encoding="utf-8")
             report = analyze_tree(root)
             self.assertIn("credential_access", report["findings"])
             self.assertIn("protected_path", report["findings"])

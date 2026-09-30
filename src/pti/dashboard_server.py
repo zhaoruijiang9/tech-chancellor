@@ -12,6 +12,7 @@ from pathlib import Path
 from threading import Thread
 from urllib.parse import parse_qs, unquote, urlparse
 
+from . import __version__
 from .cli import record_feedback
 from .dashboard_read_model import DashboardReadModel
 
@@ -157,7 +158,7 @@ class DashboardServer:
         asset_root = Path(__file__).with_name("dashboard_assets")
 
         class Handler(BaseHTTPRequestHandler):
-            server_version = "TechChancellorDashboard/0.8"
+            server_version = "TechChancellorDashboard/" + __version__
             static_assets = {
                 "app.css": "text/css; charset=utf-8",
                 "app.js": "text/javascript; charset=utf-8",

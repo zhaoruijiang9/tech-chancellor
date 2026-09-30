@@ -7,8 +7,8 @@ from .activation_policy import classify_activation_tier
 
 
 def _read_rows(db_path: str | Path) -> list[dict[str, Any]]:
-    usage_path = Path(db_path).resolve().parents[1] / "config" / "human_capability_usage.json"
-    usage = json.loads(usage_path.read_text(encoding="utf-8")) if usage_path.exists() else {}
+    from .local_config import load_usage
+    usage = load_usage(Path(db_path).resolve().parents[1])
     connection = sqlite3.connect(f"file:{Path(db_path).resolve().as_posix()}?mode=ro", uri=True)
     connection.row_factory = sqlite3.Row
     try:

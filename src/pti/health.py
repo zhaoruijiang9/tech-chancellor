@@ -2,6 +2,8 @@ import json
 import sqlite3
 import subprocess
 import time
+import os
+import shutil
 from pathlib import Path
 
 from .packet_lifecycle import active_pending_count
@@ -90,6 +92,9 @@ def health_report(root: str | Path) -> dict:
             stale_locks.append(name)
     tasks = [_task(r"\PersonalTechIntelligence\PTI-Radar-Scan"),
              _task(r"\PersonalTechIntelligence\PTI-Chancellor")]
+    tasks = [task if _task_belongs_to_root(task, root) else
+             {"name": task["name"], "status": "NOT_INSTALLED", "last_result": "UNKNOWN"}
+             for task in tasks]
     task_failures = [task["name"] for task in tasks
                      if _task_belongs_to_root(task, root) and task.get("last_result") not in {"0", "UNKNOWN"}]
     active = active_pending_count(root / "chancellor_pending")
@@ -123,7 +128,12 @@ def health_report(root: str | Path) -> dict:
         issues.append("UPSTREAM_REVIEW_NEEDS_ATTENTION")
         if status in {"HEALTHY", "DEGRADED_HISTORY_ONLY"}:
             status = "DEGRADED"
+    codex = os.environ.get("PTI_CODEX_EXE") or shutil.which("codex")
+    codex_available = bool(codex and (Path(codex).is_file() or shutil.which(codex)))
     return {"status": status, "active_pending": active, "pipeline_stalled": stalled, "locks": locks, "tasks": tasks,
+            "optional_components": {"codex": "AVAILABLE_AUTH_NOT_CHECKED" if codex_available else "NOT_CONFIGURED",
+                                    "github": "ENV_AUTH_CONFIGURED" if os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN") else "PUBLIC_ANONYMOUS",
+                                    "scheduler": "INSTALLED" if any(task["status"] != "NOT_INSTALLED" for task in tasks) else "NOT_INSTALLED"},
             "latest_scan_run": scan, "latest_stage_b_run": stage_b,
             "latest_upstream_run": upstream,
             "decision_history_count": history_count, "unique_decision_repositories": unique_history,

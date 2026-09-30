@@ -27,11 +27,15 @@ codex-*.txt
 # Local capability trials and generated artifacts
 quarantine/
 managed_capabilities/**
-!managed_capabilities/archify/
-!managed_capabilities/archify/current/
-!managed_capabilities/archify/current/README.md
-!managed_capabilities/archify/manifests/
-!managed_capabilities/archify/manifests/*.json
-!managed_capabilities/archify/wrappers/
-!managed_capabilities/archify/wrappers/*.ps1
 *.zip
+
+# User choices and generated audits are not product defaults.
+config/*.local.json
+config/stage_b.json
+config/local_capability_profile.json
+config/activation_readiness_audit.json
+config/human_capability_usage.json
+PERSONAL_*.md
+TECHCHANCELLOR_*_REPORT.md
+docs/CURRENT_PROJECT_STATE.md
+docs/superpowers/

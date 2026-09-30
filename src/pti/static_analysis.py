@@ -41,6 +41,6 @@ def analyze_tree(root: str | Path) -> dict[str, object]:
                 findings.add("service_install")
             if any(marker in lower for marker in ("start-process -verb runas", "sudo ", "runas.exe")):
                 findings.add("privilege_escalation")
-            if "d:\\money" in lower:
+            if "d:\\money" in lower or "protected-project" in lower:
                 findings.add("protected_path")
     return {"files": sorted(files), "findings": sorted(findings), "execution_performed": False}

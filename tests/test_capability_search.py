@@ -23,7 +23,7 @@ class CapabilitySearchTests(unittest.TestCase):
             c.execute("insert into repositories values (1,'owner/repo','https://github.com/owner/repo','agent workflow',100,'[\"agents\"]','2026-09-01')")
             c.execute("insert into chancellor_decisions values (1,?,?,?)", (decision(), 'p.json', '2026-09-01'))
             c.commit(); c.close(); before=db.read_bytes()
-            result = search_capabilities(db, problem="agent workflow", task_context="orchestrate agents", project_context="", current_capabilities=["native tools"], constraints=["low cost"], limit=3, project_label="D:\\money")
+            result = search_capabilities(db, problem="agent workflow", task_context="orchestrate agents", project_context="", current_capabilities=["native tools"], constraints=["low cost"], limit=3, project_label="protected-project-fixture")
             self.assertEqual(result["status"], "MATCH")
             self.assertLessEqual(len(result["results"]), 3)
             self.assertEqual(result["results"][0]["consumption_form"], "KNOWLEDGE")

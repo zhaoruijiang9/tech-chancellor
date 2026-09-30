@@ -31,7 +31,7 @@ class WindowsShortcutTests(unittest.TestCase):
         text = script.read_text(encoding="utf-8")
         self.assertIn("GetFolderPath", text)
         self.assertIn("$ProjectRoot", text)
-        self.assertNotIn("C:\\Users\\25654", text)
+        self.assertNotIn("C:\\Users\\", text)
 
     def test_public_script_is_windows_powershell_51_encoding_safe(self):
         script = Path(__file__).parents[1] / "scripts" / "install_shortcut.ps1"
