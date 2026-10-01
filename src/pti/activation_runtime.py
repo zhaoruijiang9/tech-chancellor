@@ -1,5 +1,9 @@
 """Small activation post-processing path used after semantic decisions."""
 
+from .activation_readiness import sandbox_capability_verified
+from .execution_adapter import load_execution_plan
+from .secure_execution import SandboxRejected
+
 from .activation_policy import (
     TIER_0,
     TIER_1,
@@ -55,10 +59,20 @@ def postprocess_semantic_decision(db, repository_id: int, decision: dict, packet
                 JOIN capability_sources s USING(source_id)
                 WHERE s.github_repository_id=? AND m.capability_id='SKILL_ECOSYSTEM_DISCOVERY'""", (repository_id,)).fetchone()
         if not safe_mapping:
-            _readiness(db, repository, "REQUIRES_OS_SANDBOX", "SECURE_THIRD_PARTY_EXECUTION_SANDBOX is missing; no executable adapter authorized")
-            _mark_boundary(db, repository_id, "KEEP_REFERENCE_ONLY", "REQUIRES_OS_SANDBOX")
-            return {"status": "ACTIVATION_NOT_ELIGIBLE", "reason": "REQUIRES_OS_SANDBOX"}
-        capability["activation_tier"] = TIER_1
+            verified = sandbox_capability_verified(db)
+            try:
+                plan = load_execution_plan(db.path.parent.parent, repository_id) if verified else None
+            except (SandboxRejected, ValueError, OSError):
+                plan = None
+            if plan is None:
+                category = 'NEEDS_SAFE_ADAPTER' if verified else 'REQUIRES_OS_SANDBOX'
+                _readiness(db, repository, category, 'Reviewed, pinned local execution plan and compatible evaluator required'
+                           if verified else 'SECURE_THIRD_PARTY_EXECUTION_SANDBOX is missing; no executable adapter authorized')
+                _mark_boundary(db, repository_id, "KEEP_REFERENCE_ONLY", category)
+                return {"status": "ACTIVATION_NOT_ELIGIBLE", "reason": category}
+            capability['activation_tier'] = TIER_2
+        else:
+            capability["activation_tier"] = TIER_1
     policy_decision = evaluate_validation_eligibility(capability)
     existing = db.get_activation(repository_id)
     if existing and (existing["activation_state"] in {"TRIAL_ENABLED", "USED"}

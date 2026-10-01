@@ -8,6 +8,7 @@ from .capability_library import _card, _read_rows
 from .health import health_report
 from .human_library import load_human_library_evidence, project_human_library_item
 from .human_toolbox import _with_usage
+from .secure_execution import secure_execution_status
 
 
 LIFECYCLE_LABELS = {
@@ -556,6 +557,7 @@ class DashboardReadModel:
             "name_zh": "技术丞相",
             "status": "异常" if health.get("status") == "NOT_EVALUATED" else "提醒" if str(health.get("status", "")).startswith("DEGRADED") else "正常",
             "health": health,
+            "secure_execution": secure_execution_status(self.root),
             "counts": {
                 "total": len(cards),
                 "reviewed_projects": sum(card.get("semantic_action") != "PENDING_EXTERNAL_REVIEW" for card in cards),

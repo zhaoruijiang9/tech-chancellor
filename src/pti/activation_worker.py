@@ -7,12 +7,15 @@ import io
 import json
 import os
 import re
+import shutil
 import subprocess
 import urllib.request
 import zipfile
 from pathlib import Path
 
-from .activation_policy import TIER_1, evaluate_activation_policy, evaluate_validation_eligibility, transition_activation
+from .activation_policy import TIER_1, TIER_2, evaluate_activation_policy, evaluate_validation_eligibility, transition_activation
+from .execution_adapter import ADAPTER, load_execution_plan, plan_digest, extract_reviewed_source, functional_execution
+from .secure_execution import DockerWSL2Backend, SandboxRejected, _tree_hashes
 from .capability_intelligence import project_activation_state, revoke_activation_availability
 from .quarantine import quarantine_public_repo_archive
 from .runtime_lock import CrashSafeLock, LockState
@@ -153,6 +156,34 @@ def _contract(db, repository_id: int, job_id: int, root: Path) -> dict:
     feedback = db.get_feedback(repository_id)
     if feedback and feedback[-1]["label"] in {"WATCH", "NOT_USEFUL", "TOO_RISKY"}:
         raise HumanGate("OWNER_FEEDBACK_PREVENTS_AUTO_ACTIVATION")
+    plan = load_execution_plan(root, repository_id)
+    if plan is not None:
+        existing = db.get_activation(repository_id) or {}
+        if (any(marker in repository.canonical_owner_repo.lower() for marker in
+                ('trading', 'backtesting-engine', 'minecontext'))
+                or repository.previous_decision not in {'REFERENCE_ONLY', 'WATCH', 'CANDIDATE_FOR_QUARANTINE'}
+                or existing.get('activation_state') in {'BLOCKED_HUMAN', 'FAILED_WITH_EXPLAINED_REASON'}
+                or existing.get('activation_tier') not in {None, TIER_1, TIER_2, 'TIER_0_KNOWLEDGE_PATTERN'}):
+            raise HumanGate('EXECUTABLE_CANDIDATE_BOUNDARY_PREVENTS_ACTIVATION')
+        with db._connect() as connection:
+            row = connection.execute('''SELECT i.implementation_id,s.source_id
+                FROM capability_implementations i JOIN capability_sources s USING(source_id)
+                JOIN implementation_capabilities m USING(implementation_id)
+                WHERE s.github_repository_id=? AND m.capability_id=?''',
+                (repository_id, plan['target_capability'])).fetchone()
+        if row is None:
+            raise HumanGate('REVIEWED_EXECUTABLE_CAPABILITY_MAPPING_REQUIRED')
+        DockerWSL2Backend(root).health()
+        return {'implementation_id': row['implementation_id'], 'source_id': row['source_id'],
+                'target_capability': plan['target_capability'], 'source_url': repository.url,
+                'source_version': plan['execution']['source_pin'], 'adapter': ADAPTER,
+                'activation_tier': TIER_2, 'execution_plan': plan, 'execution_plan_sha256': plan_digest(plan),
+                'fetch_strategy': 'GITHUB_COMMIT_ARCHIVE', 'install_strategy': 'PINNED_SOURCE_DATA_ONLY',
+                'dependency_behavior': 'NONE_HOST_OR_RUNTIME', 'network_requirements': 'FETCH_ONLY',
+                'credential_requirements': 'NONE', 'service_behavior': 'NONE',
+                'filesystem_scope': 'RO_CANDIDATE_RO_SYNTHETIC_INPUT_TMPFS_OUTPUT',
+                'environment_allowlist': ['PATH', 'HOME', 'LANG', 'PYTHONDONTWRITEBYTECODE'],
+                'rollback_strategy': 'RESTORE_PREVIOUS_ACTIVE_POINTER'}
     with db._connect() as connection:
         rows = connection.execute("""SELECT i.implementation_id,s.source_id,m.capability_id
             FROM capability_implementations i JOIN capability_sources s ON s.source_id=i.source_id
@@ -268,6 +299,13 @@ def _advance(root: Path, db, job: dict, provider) -> dict:
     phase = job["phase"]
     evidence = json.loads(job["evidence_json"] or "{}")
     contract = json.loads(job["contract_json"] or "{}")
+    executable = contract.get('adapter') == ADAPTER
+    tier = TIER_2 if executable else TIER_1
+    if executable:
+        current = _contract(db, repository_id, job_id, root)
+        if (current['execution_plan_sha256'] != contract.get('execution_plan_sha256')
+                or contract.get('source_version') != current['source_version']):
+            raise HumanGate('EXECUTION_PLAN_CHANGED_ON_RESUME')
     repository = db.get_repository(repository_id)
     if phase == "EVALUATION_NO_DELTA":
         raise TerminalFailure("NO_MEANINGFUL_DELTA")
@@ -275,22 +313,26 @@ def _advance(root: Path, db, job: dict, provider) -> dict:
         pointer = _active_pointer(root, repository_id)
         if not pointer.is_file() or json.loads(pointer.read_text(encoding="utf-8")).get("activation_job_id") != job_id:
             raise TerminalFailure("AVAILABLE_POINTER_MISSING")
-        _record(db, repository_id, TIER_1, "TRIAL_ENABLED", trial_status="ENABLED_CONTROLLED",
+        if executable and _tree_hashes(_version_root(root, repository_id, contract['source_version']) / 'source') != evidence['static_review']['source_hashes']:
+            raise SandboxRejected('MANAGED_SOURCE_CHANGED_AFTER_REVIEW')
+        _record(db, repository_id, tier, "TRIAL_ENABLED", trial_status="ENABLED_CONTROLLED",
                 evidence_maturity="TESTED", rollback_status="READY", isolated_test_status="PASS")
         project_activation_state(db.path, repository_id, "AVAILABLE", f"activation-job:{job_id}:evaluation")
         db.complete_activation(job_id, "SUCCEEDED")
         return {"repository_id": repository_id, "status": "SUCCEEDED", "phase": "AVAILABLE"}
     if phase == "QUEUED":
         contract = _contract(db, repository_id, job_id, root)
-        gate = evaluate_validation_eligibility({"activation_tier": TIER_1})
+        executable = contract.get('adapter') == ADAPTER
+        tier = TIER_2 if executable else TIER_1
+        gate = evaluate_validation_eligibility({"activation_tier": tier})
         if not gate.eligible:
             raise HumanGate("AUTO_VALIDATION_NOT_ELIGIBLE")
         previous = db.get_activation(repository_id)
         job = db.update_activation_job(job_id, "PLAN_READY", {"prior_activation": previous}, contract)
-        _record(db, repository_id, TIER_1, "QUARANTINE_READY", notes="Pinned read-only index validation in progress")
+        _record(db, repository_id, tier, "QUARANTINE_READY", notes="Pinned bounded adapter validation in progress")
         phase = "PLAN_READY"
     if phase == "PLAN_READY":
-        sha = provider.pin(repository.canonical_owner_repo)
+        sha = contract['source_version'] if executable else provider.pin(repository.canonical_owner_repo)
         if not SHA.fullmatch(sha):
             raise TerminalFailure("INVALID_PIN")
         contract["source_version"] = sha
@@ -317,12 +359,15 @@ def _advance(root: Path, db, job: dict, provider) -> dict:
                 f"https://github.com/{repository.canonical_owner_repo}/archive/{sha}.zip",
                 repository_id, repository.canonical_owner_repo, sha, payload)
         job = db.update_activation_job(job_id, "QUARANTINED", {"quarantine": manifest})
-        _record(db, repository_id, TIER_1, "QUARANTINED", pinned_version=sha)
+        _record(db, repository_id, tier, "QUARANTINED", pinned_version=sha)
         phase = "QUARANTINED"
     if phase == "QUARANTINED":
-        _record(db, repository_id, TIER_1, "QUARANTINED", pinned_version=sha)
+        _record(db, repository_id, tier, "QUARANTINED", pinned_version=sha)
         manifest = json.loads(job["evidence_json"])["quarantine"]
         archive_path = Path(manifest["path"])
+        expected_archive = root / 'quarantine/activation' / str(job_id) / (repository.canonical_owner_repo.replace('/', '--') + '.archive')
+        if archive_path.absolute() != expected_archive.absolute() or archive_path.resolve() != archive_path.absolute():
+            raise HumanGate('QUARANTINE_PATH_OUTSIDE_JOB_ALLOWLIST')
         payload = archive_path.read_bytes()
         if hashlib.sha256(payload).hexdigest() != manifest["sha256"]:
             raise TerminalFailure("QUARANTINE_INTEGRITY_FAILURE")
@@ -330,72 +375,95 @@ def _advance(root: Path, db, job: dict, provider) -> dict:
         scope = root / "state" / "activation_work" / str(job_id)
         scope.mkdir(parents=True, exist_ok=True)
         (scope / "README.md").write_text(text, encoding="utf-8")
-        analysis = analyze_tree(scope)
+        analysis = extract_reviewed_source(payload, scope / 'source') if executable else analyze_tree(scope)
         if set(analysis["findings"]) & {"symlink", "oversized_file", "credential_access", "service_install",
                                          "privilege_escalation", "protected_path"}:
             raise HumanGate("STATIC_REVIEW_REQUIRES_HUMAN")
         entries = index_entries(text)
-        if len(entries) < 3:
+        if not executable and len(entries) < 3:
             raise TerminalFailure("INSUFFICIENT_DIRECT_SKILL_LINKS")
         analysis.update(inventory)
-        analysis.update({"reviewed_surface": "root README.md only", "indexed_links": len(entries),
+        analysis.update({"reviewed_surface": analysis.get('reviewed_surface', "root README.md only"), "indexed_links": len(entries),
                          "upstream_code_executed": False,
                          "documentation_commands_executed": False})
         job = db.update_activation_job(job_id, "STATIC_ANALYSIS_PASS", {"static_review": analysis})
-        _record(db, repository_id, TIER_1, "STATIC_ANALYSIS_PASS", pinned_version=sha,
-                static_analysis_status="PASS", notes="Read-only Markdown data adapter; upstream code never executed")
+        _record(db, repository_id, tier, "STATIC_ANALYSIS_PASS", pinned_version=sha,
+                static_analysis_status="PASS", notes="Static review passed; execution remains adapter-gated")
         phase = "STATIC_ANALYSIS_PASS"
     if phase == "STATIC_ANALYSIS_PASS":
-        _record(db, repository_id, TIER_1, "STATIC_ANALYSIS_PASS", pinned_version=sha,
+        _record(db, repository_id, tier, "STATIC_ANALYSIS_PASS", pinned_version=sha,
                 static_analysis_status="PASS")
         version = _version_root(root, repository_id, sha)
+        if version.resolve() != version.absolute():
+            raise HumanGate('MANAGED_VERSION_LINK_FORBIDDEN')
         version.mkdir(parents=True, exist_ok=True)
         text, _ = safe_readme_from_archive(Path(json.loads(job["evidence_json"])["quarantine"]["path"]).read_bytes())
         readme = version / "README.md"
         if readme.exists() and readme.read_text(encoding="utf-8") != text:
             raise TerminalFailure("MANAGED_VERSION_CONFLICT")
         readme.write_text(text, encoding="utf-8")
+        if executable:
+            source = root / 'state/activation_work' / str(job_id) / 'source'
+            review = json.loads(job['evidence_json'])['static_review']
+            if _tree_hashes(source) != review['source_hashes']:
+                raise SandboxRejected('SOURCE_CHANGED_AFTER_STATIC_REVIEW')
+            destination = version / 'source'
+            if destination.exists() and _tree_hashes(destination) != review['source_hashes']:
+                raise SandboxRejected('MANAGED_SOURCE_CONFLICT')
+            shutil.copytree(source, destination, dirs_exist_ok=True)
         rollback = _rollback_test(_active_pointer(root, repository_id), sha)
         job = db.update_activation_job(job_id, "ISOLATED_INSTALL_PASS", {
-            "install": {"path": str(readme), "strategy": "DATA_ONLY_NO_DEPENDENCIES"}, "rollback": rollback})
-        _record(db, repository_id, TIER_1, "STATIC_ANALYSIS_PASS", rollback_status="READY")
+            "install": {"path": str(version), "strategy": "DATA_ONLY_NO_DEPENDENCIES"}, "rollback": rollback})
+        _record(db, repository_id, tier, "STATIC_ANALYSIS_PASS", rollback_status="READY")
         phase = "ISOLATED_INSTALL_PASS"
     if phase == "ISOLATED_INSTALL_PASS":
-        _record(db, repository_id, TIER_1, "STATIC_ANALYSIS_PASS", rollback_status="READY")
+        _record(db, repository_id, tier, "STATIC_ANALYSIS_PASS", rollback_status="READY")
         readme = _version_root(root, repository_id, sha) / "README.md"
-        sample = index_entries(readme.read_text(encoding="utf-8"))[0]["name"]
-        hits = _search_file(readme, sample)
-        if not hits:
-            raise TerminalFailure("FUNCTIONAL_SEARCH_FAILED")
-        job = db.update_activation_job(job_id, "FUNCTIONAL_TEST_PASS", {
-            "functional": {"query": sample, "hits": len(hits), "upstream_code_executed": False}})
-        _record(db, repository_id, TIER_1, "ISOLATED_TEST_PASS", isolated_test_status="PASS",
+        if executable:
+            functional, evaluation = functional_execution(root, job_id, contract,
+                                                        json.loads(job['evidence_json'])['static_review'])
+            functional_evidence = {'functional': functional, 'evaluation': evaluation}
+        else:
+            sample = index_entries(readme.read_text(encoding="utf-8"))[0]["name"]
+            hits = _search_file(readme, sample)
+            if not hits:
+                raise TerminalFailure("FUNCTIONAL_SEARCH_FAILED")
+            functional_evidence = {'functional': {'query': sample, 'hits': len(hits), 'upstream_code_executed': False}}
+        job = db.update_activation_job(job_id, "FUNCTIONAL_TEST_PASS", functional_evidence)
+        _record(db, repository_id, tier, "ISOLATED_TEST_PASS", isolated_test_status="PASS",
                 evidence_maturity="TESTED")
         project_activation_state(db.path, repository_id, "VERIFIED", f"activation-job:{job_id}:functional")
         phase = "FUNCTIONAL_TEST_PASS"
     if phase == "FUNCTIONAL_TEST_PASS":
-        _record(db, repository_id, TIER_1, "ISOLATED_TEST_PASS", rollback_status="READY",
+        _record(db, repository_id, tier, "ISOLATED_TEST_PASS", rollback_status="READY",
                 isolated_test_status="PASS", evidence_maturity="TESTED")
         project_activation_state(db.path, repository_id, "VERIFIED", f"activation-job:{job_id}:functional")
-        evaluation = _evaluate(root, repository_id, _version_root(root, repository_id, sha) / "README.md")
+        evaluation = (json.loads(job['evidence_json'])['evaluation'] if executable else
+                      _evaluate(root, repository_id, _version_root(root, repository_id, sha) / "README.md"))
         job = db.update_activation_job(job_id, "EVALUATION_PASS" if evaluation["outcome"] == "IMPROVED" else "EVALUATION_NO_DELTA",
                                        {"evaluation": evaluation})
         if evaluation["outcome"] != "IMPROVED":
             raise TerminalFailure("NO_MEANINGFUL_DELTA")
         phase = "EVALUATION_PASS"
     if phase == "EVALUATION_PASS":
-        _record(db, repository_id, TIER_1, "ISOLATED_TEST_PASS", rollback_status="READY",
+        _record(db, repository_id, tier, "ISOLATED_TEST_PASS", rollback_status="READY",
                 isolated_test_status="PASS", evidence_maturity="TESTED")
         evidence = json.loads(job["evidence_json"])
-        policy = evaluate_activation_policy({"activation_tier": TIER_1, "pinned_version": sha,
+        policy = evaluate_activation_policy({"activation_tier": tier, "pinned_version": sha,
             "rollback_available": evidence.get("rollback", {}).get("tested")},
             {"static_analysis_pass": True, "isolated_test_pass": True,
              "capability_delta": evidence["evaluation"]["outcome"] == "IMPROVED"})
         if not policy.eligible:
             raise HumanGate("AUTO_PROMOTION_NOT_ELIGIBLE")
+        if executable:
+            DockerWSL2Backend(root).health()
+            if evidence['functional'].get('cleanup') != 'CONTAINER_DESTROYED':
+                raise HumanGate('CLEANUP_REQUIRED_BEFORE_PROMOTION')
+            if _tree_hashes(_version_root(root, repository_id, sha) / 'source') != evidence['static_review']['source_hashes']:
+                raise SandboxRejected('MANAGED_SOURCE_CHANGED_AFTER_REVIEW')
         pointer = _active_pointer(root, repository_id)
         previous_path = _promote_pointer(pointer, sha, job_id)
-        _record(db, repository_id, TIER_1, "TRIAL_ENABLED", trial_status="ENABLED_CONTROLLED",
+        _record(db, repository_id, tier, "TRIAL_ENABLED", trial_status="ENABLED_CONTROLLED",
                 evidence_maturity="TESTED")
         project_activation_state(db.path, repository_id, "AVAILABLE", f"activation-job:{job_id}:evaluation")
         db.update_activation_job(job_id, "AVAILABLE", {"promotion": {"policy": "AUTO_PROMOTION_ELIGIBLE",
@@ -455,10 +523,16 @@ def run_activation_worker(root: str | Path, db, *, provider=None, limit: int = 3
                 continue
             try:
                 results.append(_advance(root, db, claimed, provider))
-            except HumanGate as error:
+            except (HumanGate, SandboxRejected) as error:
                 reason = str(error)
                 db.complete_activation(job["id"], "BLOCKED_HUMAN", reason)
-                _record(db, job["repository_id"], job["activation_tier"], "BLOCKED_HUMAN", notes=reason)
+                prior = db.get_activation(job['repository_id']) or {}
+                if json.loads(claimed['contract_json'] or '{}').get('adapter') == ADAPTER:
+                    revoke_activation_availability(db.path, job['repository_id'])
+                if not (reason == 'EXECUTABLE_CANDIDATE_BOUNDARY_PREVENTS_ACTIVATION'
+                        and prior.get('activation_state') == 'FAILED_WITH_EXPLAINED_REASON'):
+                    _record(db, job["repository_id"], job["activation_tier"], "BLOCKED_HUMAN",
+                            trial_status='DISABLED', notes=reason)
                 results.append({"repository_id": job["repository_id"], "status": "BLOCKED_HUMAN", "reason": reason})
             except (TerminalFailure, ValueError) as error:
                 reason = str(error)[:200]

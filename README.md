@@ -54,12 +54,13 @@ The outcome illustrates the product: useful discovery does not have to end in un
 
 **SAFE_BY_CONTAINMENT:** automatic paths must be low-risk, bounded, reversible and supported by an existing adapter. Local preliminary screening and final Chancellor review are separate stages.
 
-v0.2.0 does **not** automatically execute arbitrary third-party Python, Node, CLI or MCP services. A secure third-party execution sandbox remains a missing platform capability. Credentials, privileged operations, services, financial accounts and protected projects require appropriate human boundaries.
+The published v0.2.0 does **not** automatically execute arbitrary third-party Python, Node, CLI or MCP services. Post-release development adds an optional, machine-qualified [bounded Docker/WSL2 backend](docs/SECURE_EXECUTION.md), not blanket execution permission. Credentials, privileged operations, services, financial accounts and protected projects retain human boundaries.
 
 Runtime SQLite, approvals, installed versions, pointers, usage receipts, caches and personal reports stay local and are not release defaults. Generic guidance is public; `CONFIG != STATE`.
 
 ## Optional Components
 
+- Secure execution: optional Docker Desktop/WSL2 Linux backend for explicitly reviewed, pinned, bounded offline plans. Real local containment qualification is required; clean installations remain UNCONFIGURED. No Docker is needed for the base product. See [scope and limitations](docs/SECURE_EXECUTION.md).
 - Codex CLI: required for formal Stage B and semantic delta review, not for initialization or the dashboard. Model priority: `PTI_STAGE_B_MODEL` → ignored `config/stage_b.local.json` → legacy ignored `config/stage_b.json` → Codex CLI default. See [configuration](docs/USAGE.md#codex-and-models).
 - GitHub authentication: optional higher public API limits through process environment `GH_TOKEN` or `GITHUB_TOKEN`; never commit a credential.
 - Windows Scheduler: explicit opt-in deployment, not an installation requirement. See [scheduling](docs/USAGE.md#scheduling).

@@ -14,6 +14,12 @@ READINESS_CATEGORIES = {
 }
 
 
+def sandbox_capability_verified(db) -> bool:
+    with db._connect() as connection:
+        return connection.execute('''SELECT 1 FROM personal_states WHERE subject_type='CAPABILITY'
+            AND subject_id='SECURE_THIRD_PARTY_EXECUTION_SANDBOX' AND state='VERIFIED' ''').fetchone() is not None
+
+
 def audit_current_library(db, classifications: dict[str, dict] | None = None) -> dict:
     with db._connect() as connection:
         rows = connection.execute("""SELECT i.implementation_id,s.canonical_name,
@@ -48,7 +54,7 @@ def audit_current_library(db, classifications: dict[str, dict] | None = None) ->
                 category=excluded.category,blocker=excluded.blocker,audited_at=CURRENT_TIMESTAMP""",
                 (implementation_id, category, blocker[:1000]))
         counts[category] += 1
-    if counts["REQUIRES_OS_SANDBOX"] >= 2:
+    if counts["REQUIRES_OS_SANDBOX"] >= 2 and not sandbox_capability_verified(db):
         store = CapabilityStore(db.path)
         store.upsert_capability("SECURE_THIRD_PARTY_EXECUTION_SANDBOX", "安全第三方执行沙箱",
                                 "隔离执行第三方代码所需的 OS 级能力；当前缺失")
